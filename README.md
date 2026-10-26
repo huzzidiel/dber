@@ -31,12 +31,14 @@ segunda lista de relaciones que se pueda desincronizar.
 
 ## Requisitos
 
-- PHP 8.2+
-- Laravel 10, 11 o 12
+- PHP 8.2+ (Laravel 13 requiere PHP 8.3+)
+- Laravel 10, 11, 12 o 13
 - JSON (incluido en PHP)
-- YAML opcional: `symfony/yaml`
+- YAML opcional: `symfony/yaml` 6.4–8.x
 
-El paquete está pensado para instalarse como dependencia de desarrollo.
+El paquete está pensado para instalarse como dependencia de desarrollo. Las
+constraints son amplias a propósito: el código usa APIs estables de Laravel y no
+depende de una versión concreta del framework.
 
 ## Instalación
 
@@ -479,6 +481,10 @@ Las pruebas cubren:
 - guardado, conflictos de hash y `force`;
 - endpoints del visor, contexto, Mermaid, assets y JSON Schema;
 - comandos de instalación, validación y exportación.
+
+La suite se ejecutó contra Laravel 12 (Testbench 10, Pest 3) y Laravel 13
+(Testbench 11, Pest 4). El entorno local queda en Laravel 13; las constraints del
+paquete permiten Laravel 10–13 y Laravel 13 exige PHP 8.3+.
 
 ## Licencia
 
