@@ -1,0 +1,233 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/huzzidiel/dber/main/resources/stubs/schema.json",
+    "title": "Dber schema",
+    "description": "Editable entity relationship schema. Tables are keyed by name and foreign keys are declared once on the referencing field.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "schema_version",
+        "name",
+        "tables"
+    ],
+    "properties": {
+        "$schema": {
+            "type": "string"
+        },
+        "schema_version": {
+            "const": 1
+        },
+        "name": {
+            "type": "string",
+            "minLength": 1
+        },
+        "database": {
+            "type": "string",
+            "description": "Database engine, for example mysql, pgsql or sqlite."
+        },
+        "tables": {
+            "type": "object",
+            "description": "Tables keyed by physical table name. Use snake_case.",
+            "additionalProperties": {
+                "$ref": "#/$defs/table"
+            }
+        }
+    },
+    "$defs": {
+        "table": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "fields"
+            ],
+            "properties": {
+                "model": {
+                    "type": "string",
+                    "description": "Optional Eloquent model class, for example App\\Models\\User."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Optional short human description. Do not use it for AI instructions."
+                },
+                "primary_key": {
+                    "type": "array",
+                    "description": "Primary key columns. Use an array for composite keys.",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "uniqueItems": true
+                },
+                "pivot": {
+                    "type": "boolean",
+                    "description": "Marks a many-to-many join table. It should contain at least two foreign keys."
+                },
+                "fields": {
+                    "type": "object",
+                    "description": "Fields keyed by physical column name. Use snake_case.",
+                    "minProperties": 1,
+                    "additionalProperties": {
+                        "$ref": "#/$defs/field"
+                    }
+                },
+                "indexes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/index"
+                    }
+                }
+            }
+        },
+        "field": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "type"
+            ],
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "bigint",
+                        "integer",
+                        "mediumint",
+                        "smallint",
+                        "tinyint",
+                        "string",
+                        "char",
+                        "text",
+                        "mediumtext",
+                        "longtext",
+                        "boolean",
+                        "decimal",
+                        "float",
+                        "double",
+                        "date",
+                        "datetime",
+                        "timestamp",
+                        "time",
+                        "year",
+                        "json",
+                        "uuid",
+                        "ulid",
+                        "binary",
+                        "enum",
+                        "set"
+                    ]
+                },
+                "length": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Length for string, char and binary fields."
+                },
+                "precision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Precision for decimal, float and double fields."
+                },
+                "scale": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Scale for numeric fields with precision."
+                },
+                "nullable": {
+                    "type": "boolean"
+                },
+                "unique": {
+                    "type": "boolean"
+                },
+                "unsigned": {
+                    "type": "boolean"
+                },
+                "auto_increment": {
+                    "type": "boolean"
+                },
+                "default": {
+                    "type": [
+                        "string",
+                        "integer",
+                        "number",
+                        "boolean",
+                        "null"
+                    ],
+                    "description": "Scalar default value. Omit the key when the column has no default."
+                },
+                "values": {
+                    "type": "array",
+                    "description": "Allowed values for enum and set fields.",
+                    "items": {
+                        "type": "string"
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                },
+                "references": {
+                    "$ref": "#/$defs/reference"
+                }
+            }
+        },
+        "reference": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "table",
+                "field"
+            ],
+            "properties": {
+                "table": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "field": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "on_delete": {
+                    "type": "string",
+                    "enum": [
+                        "cascade",
+                        "restrict",
+                        "set_null",
+                        "no_action",
+                        "set_default"
+                    ]
+                },
+                "on_update": {
+                    "type": "string",
+                    "enum": [
+                        "cascade",
+                        "restrict",
+                        "set_null",
+                        "no_action",
+                        "set_default"
+                    ]
+                }
+            }
+        },
+        "index": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "columns"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "columns": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                },
+                "unique": {
+                    "type": "boolean"
+                }
+            }
+        }
+    }
+}

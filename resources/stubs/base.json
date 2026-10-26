@@ -1,0 +1,435 @@
+{
+    "$schema": "./schema.json",
+    "schema_version": 1,
+    "name": "Dber Demo Store",
+    "database": "mysql",
+    "tables": {
+        "users": {
+            "model": "App\\Models\\User",
+            "description": "Application accounts.",
+            "primary_key": [
+                "id"
+            ],
+            "fields": {
+                "id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "auto_increment": true
+                },
+                "name": {
+                    "type": "string",
+                    "length": 255
+                },
+                "email": {
+                    "type": "string",
+                    "length": 255,
+                    "unique": true
+                },
+                "password": {
+                    "type": "string",
+                    "length": 255
+                },
+                "remember_token": {
+                    "type": "string",
+                    "length": 100,
+                    "nullable": true
+                },
+                "created_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                },
+                "updated_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                }
+            }
+        },
+        "profiles": {
+            "model": "App\\Models\\Profile",
+            "description": "Optional profile data for a user.",
+            "primary_key": [
+                "id"
+            ],
+            "fields": {
+                "id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "auto_increment": true
+                },
+                "user_id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "unique": true,
+                    "references": {
+                        "table": "users",
+                        "field": "id",
+                        "on_delete": "cascade"
+                    }
+                },
+                "bio": {
+                    "type": "text",
+                    "nullable": true
+                },
+                "avatar_path": {
+                    "type": "string",
+                    "length": 2048,
+                    "nullable": true
+                },
+                "created_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                },
+                "updated_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                }
+            }
+        },
+        "roles": {
+            "model": "App\\Models\\Role",
+            "primary_key": [
+                "id"
+            ],
+            "fields": {
+                "id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "auto_increment": true
+                },
+                "name": {
+                    "type": "string",
+                    "length": 100
+                },
+                "slug": {
+                    "type": "string",
+                    "length": 100,
+                    "unique": true
+                },
+                "created_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                },
+                "updated_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                }
+            }
+        },
+        "role_user": {
+            "primary_key": [
+                "role_id",
+                "user_id"
+            ],
+            "pivot": true,
+            "fields": {
+                "role_id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "references": {
+                        "table": "roles",
+                        "field": "id",
+                        "on_delete": "cascade"
+                    }
+                },
+                "user_id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "references": {
+                        "table": "users",
+                        "field": "id",
+                        "on_delete": "cascade"
+                    }
+                }
+            }
+        },
+        "categories": {
+            "model": "App\\Models\\Category",
+            "description": "Hierarchical product categories.",
+            "primary_key": [
+                "id"
+            ],
+            "fields": {
+                "id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "auto_increment": true
+                },
+                "parent_id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "nullable": true,
+                    "references": {
+                        "table": "categories",
+                        "field": "id",
+                        "on_delete": "set_null"
+                    }
+                },
+                "name": {
+                    "type": "string",
+                    "length": 255
+                },
+                "slug": {
+                    "type": "string",
+                    "length": 255,
+                    "unique": true
+                },
+                "description": {
+                    "type": "text",
+                    "nullable": true
+                },
+                "created_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                },
+                "updated_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                }
+            }
+        },
+        "products": {
+            "model": "App\\Models\\Product",
+            "primary_key": [
+                "id"
+            ],
+            "fields": {
+                "id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "auto_increment": true
+                },
+                "category_id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "references": {
+                        "table": "categories",
+                        "field": "id",
+                        "on_delete": "restrict"
+                    }
+                },
+                "name": {
+                    "type": "string",
+                    "length": 255
+                },
+                "slug": {
+                    "type": "string",
+                    "length": 255,
+                    "unique": true
+                },
+                "price": {
+                    "type": "decimal",
+                    "precision": 10,
+                    "scale": 2
+                },
+                "stock": {
+                    "type": "integer",
+                    "unsigned": true,
+                    "default": 0
+                },
+                "status": {
+                    "type": "enum",
+                    "values": [
+                        "draft",
+                        "published",
+                        "archived"
+                    ],
+                    "default": "draft"
+                },
+                "is_featured": {
+                    "type": "boolean",
+                    "default": false
+                },
+                "metadata": {
+                    "type": "json",
+                    "nullable": true
+                },
+                "created_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                },
+                "updated_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                }
+            },
+            "indexes": [
+                {
+                    "columns": [
+                        "status"
+                    ]
+                },
+                {
+                    "columns": [
+                        "category_id",
+                        "status"
+                    ]
+                }
+            ]
+        },
+        "tags": {
+            "model": "App\\Models\\Tag",
+            "primary_key": [
+                "id"
+            ],
+            "fields": {
+                "id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "auto_increment": true
+                },
+                "name": {
+                    "type": "string",
+                    "length": 100
+                },
+                "slug": {
+                    "type": "string",
+                    "length": 100,
+                    "unique": true
+                },
+                "created_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                },
+                "updated_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                }
+            }
+        },
+        "product_tag": {
+            "primary_key": [
+                "product_id",
+                "tag_id"
+            ],
+            "pivot": true,
+            "fields": {
+                "product_id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "references": {
+                        "table": "products",
+                        "field": "id",
+                        "on_delete": "cascade"
+                    }
+                },
+                "tag_id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "references": {
+                        "table": "tags",
+                        "field": "id",
+                        "on_delete": "cascade"
+                    }
+                }
+            }
+        },
+        "orders": {
+            "model": "App\\Models\\Order",
+            "primary_key": [
+                "id"
+            ],
+            "fields": {
+                "id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "auto_increment": true
+                },
+                "user_id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "references": {
+                        "table": "users",
+                        "field": "id",
+                        "on_delete": "restrict"
+                    }
+                },
+                "status": {
+                    "type": "enum",
+                    "values": [
+                        "pending",
+                        "paid",
+                        "shipped",
+                        "cancelled"
+                    ],
+                    "default": "pending"
+                },
+                "total": {
+                    "type": "decimal",
+                    "precision": 12,
+                    "scale": 2,
+                    "default": 0
+                },
+                "placed_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                },
+                "created_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                },
+                "updated_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                }
+            }
+        },
+        "order_items": {
+            "model": "App\\Models\\OrderItem",
+            "primary_key": [
+                "id"
+            ],
+            "fields": {
+                "id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "auto_increment": true
+                },
+                "order_id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "references": {
+                        "table": "orders",
+                        "field": "id",
+                        "on_delete": "cascade"
+                    }
+                },
+                "product_id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "references": {
+                        "table": "products",
+                        "field": "id",
+                        "on_delete": "restrict"
+                    }
+                },
+                "quantity": {
+                    "type": "integer",
+                    "unsigned": true,
+                    "default": 1
+                },
+                "unit_price": {
+                    "type": "decimal",
+                    "precision": 10,
+                    "scale": 2
+                },
+                "created_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                },
+                "updated_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                }
+            },
+            "indexes": [
+                {
+                    "columns": [
+                        "order_id",
+                        "product_id"
+                    ],
+                    "unique": true
+                }
+            ]
+        }
+    }
+}
