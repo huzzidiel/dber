@@ -64,7 +64,7 @@
                 },
                 "fields": {
                     "type": "object",
-                    "description": "Fields keyed by physical column name. Use snake_case.",
+                    "description": "Fields keyed by physical column name. Use snake_case. Keep created_at, updated_at and deleted_at at the end.",
                     "minProperties": 1,
                     "additionalProperties": {
                         "$ref": "#/$defs/field"

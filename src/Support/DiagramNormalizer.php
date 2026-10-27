@@ -30,6 +30,17 @@ final class DiagramNormalizer
     ];
 
     /**
+     * Campos de ciclo de vida que siempre se muestran al final.
+     *
+     * @var list<string>
+     */
+    private const LIFECYCLE_FIELDS = [
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    ];
+
+    /**
      * Claves válidas de una tabla.
      *
      * @var list<string>
@@ -275,6 +286,8 @@ final class DiagramNormalizer
 
         if ($fields === []) {
             $this->error($path.'.fields', 'The table needs at least one field.');
+        } else {
+            $fields = $this->orderFields($fields);
         }
 
         $indexes = [];
@@ -322,6 +335,35 @@ final class DiagramNormalizer
         }
 
         return $table;
+    }
+
+    /**
+     * Mueve created_at, updated_at y deleted_at al final, en ese orden.
+     *
+     * @param array<string, mixed> $fields
+     * @return array<string, mixed>
+     */
+    private function orderFields(array $fields): array
+    {
+        $ordered = [];
+        $lifecycle = [];
+
+        foreach ($fields as $name => $field) {
+            if (in_array($name, self::LIFECYCLE_FIELDS, true)) {
+                $lifecycle[$name] = $field;
+                continue;
+            }
+
+            $ordered[$name] = $field;
+        }
+
+        foreach (self::LIFECYCLE_FIELDS as $name) {
+            if (array_key_exists($name, $lifecycle)) {
+                $ordered[$name] = $lifecycle[$name];
+            }
+        }
+
+        return $ordered;
     }
 
     /**

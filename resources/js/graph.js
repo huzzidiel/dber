@@ -46,7 +46,6 @@ export class Graph {
 
         this.drag = null;
         this.pan = null;
-        this.suppressClick = false;
         this.initialized = false;
 
         this.loadPositions();
@@ -578,16 +577,6 @@ export class Graph {
         });
 
         group.addEventListener('pointerdown', (event) => this.beginNodeDrag(event, table.key));
-        group.addEventListener('click', (event) => {
-            event.stopPropagation();
-
-            if (this.suppressClick) {
-                this.suppressClick = false;
-                return;
-            }
-
-            this.onSelect(table.key);
-        });
         group.addEventListener('dblclick', (event) => {
             event.stopPropagation();
             this.onEdit(table.key);
@@ -922,15 +911,16 @@ export class Graph {
 
         const finishPointer = (event) => {
             if (this.drag !== null && event.pointerId === this.drag.pointerId) {
-                if (this.drag.moved) {
-                    this.suppressClick = true;
-                    window.setTimeout(() => {
-                        this.suppressClick = false;
-                    }, 60);
+                const key = this.drag.key;
+                const moved = this.drag.moved;
+
+                if (moved) {
                     this.persistPositions();
+                } else {
+                    this.onSelect(key);
                 }
 
-                this.nodeEls.get(this.drag.key)?.classList.remove('is-dragging');
+                this.nodeEls.get(key)?.classList.remove('is-dragging');
                 this.drag = null;
                 this.svgElement.classList.remove('is-dragging');
                 this.svgElement.releasePointerCapture?.(event.pointerId);

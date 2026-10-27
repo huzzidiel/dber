@@ -183,6 +183,16 @@ export function isSafeName(value) {
     return /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
 }
 
+export const LIFECYCLE_FIELDS = [
+    'created_at',
+    'updated_at',
+    'deleted_at',
+];
+
+export function isLifecycleField(name) {
+    return LIFECYCLE_FIELDS.includes(name);
+}
+
 export function formatCount(value) {
     return new Intl.NumberFormat('en-US').format(value);
 }

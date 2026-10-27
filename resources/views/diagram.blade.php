@@ -102,6 +102,16 @@
                 <span id="dber-live-label">Live</span>
             </span>
 
+            <button
+                id="dber-theme"
+                type="button"
+                class="dber-btn dber-btn-icon"
+                title="Switch to light theme"
+                aria-label="Switch color theme"
+            >
+                <span id="dber-theme-icon" aria-hidden="true">☀</span>
+            </button>
+
             <span
                 id="dber-dirty"
                 class="dber-dirty"

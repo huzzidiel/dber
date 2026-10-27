@@ -1,12 +1,12 @@
 {
     "$schema": "./schema.json",
     "schema_version": 1,
-    "name": "Dber Demo Store",
+    "name": "Laravel application",
     "database": "mysql",
     "tables": {
         "users": {
             "model": "App\\Models\\User",
-            "description": "Application accounts.",
+            "description": "Application users.",
             "primary_key": [
                 "id"
             ],
@@ -25,6 +25,10 @@
                     "length": 255,
                     "unique": true
                 },
+                "email_verified_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                },
                 "password": {
                     "type": "string",
                     "length": 255
@@ -41,52 +45,15 @@
                 "updated_at": {
                     "type": "timestamp",
                     "nullable": true
-                }
-            }
-        },
-        "profiles": {
-            "model": "App\\Models\\Profile",
-            "description": "Optional profile data for a user.",
-            "primary_key": [
-                "id"
-            ],
-            "fields": {
-                "id": {
-                    "type": "bigint",
-                    "unsigned": true,
-                    "auto_increment": true
                 },
-                "user_id": {
-                    "type": "bigint",
-                    "unsigned": true,
-                    "unique": true,
-                    "references": {
-                        "table": "users",
-                        "field": "id",
-                        "on_delete": "cascade"
-                    }
-                },
-                "bio": {
-                    "type": "text",
-                    "nullable": true
-                },
-                "avatar_path": {
-                    "type": "string",
-                    "length": 2048,
-                    "nullable": true
-                },
-                "created_at": {
-                    "type": "timestamp",
-                    "nullable": true
-                },
-                "updated_at": {
+                "deleted_at": {
                     "type": "timestamp",
                     "nullable": true
                 }
             }
         },
         "roles": {
-            "model": "App\\Models\\Role",
+            "model": "Spatie\\Permission\\Models\\Role",
             "primary_key": [
                 "id"
             ],
@@ -98,12 +65,11 @@
                 },
                 "name": {
                     "type": "string",
-                    "length": 100
+                    "length": 255
                 },
-                "slug": {
+                "guard_name": {
                     "type": "string",
-                    "length": 100,
-                    "unique": true
+                    "length": 255
                 },
                 "created_at": {
                     "type": "timestamp",
@@ -113,14 +79,62 @@
                     "type": "timestamp",
                     "nullable": true
                 }
-            }
+            },
+            "indexes": [
+                {
+                    "columns": [
+                        "name",
+                        "guard_name"
+                    ],
+                    "unique": true
+                }
+            ]
         },
-        "role_user": {
+        "permissions": {
+            "model": "Spatie\\Permission\\Models\\Permission",
+            "primary_key": [
+                "id"
+            ],
+            "fields": {
+                "id": {
+                    "type": "bigint",
+                    "unsigned": true,
+                    "auto_increment": true
+                },
+                "name": {
+                    "type": "string",
+                    "length": 255
+                },
+                "guard_name": {
+                    "type": "string",
+                    "length": 255
+                },
+                "created_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                },
+                "updated_at": {
+                    "type": "timestamp",
+                    "nullable": true
+                }
+            },
+            "indexes": [
+                {
+                    "columns": [
+                        "name",
+                        "guard_name"
+                    ],
+                    "unique": true
+                }
+            ]
+        },
+        "model_has_roles": {
+            "description": "Spatie polymorphic assignment of roles to any model.",
             "primary_key": [
                 "role_id",
-                "user_id"
+                "model_id",
+                "model_type"
             ],
-            "pivot": true,
             "fields": {
                 "role_id": {
                     "type": "bigint",
@@ -131,305 +145,85 @@
                         "on_delete": "cascade"
                     }
                 },
-                "user_id": {
-                    "type": "bigint",
-                    "unsigned": true,
-                    "references": {
-                        "table": "users",
-                        "field": "id",
-                        "on_delete": "cascade"
-                    }
-                }
-            }
-        },
-        "categories": {
-            "model": "App\\Models\\Category",
-            "description": "Hierarchical product categories.",
-            "primary_key": [
-                "id"
-            ],
-            "fields": {
-                "id": {
-                    "type": "bigint",
-                    "unsigned": true,
-                    "auto_increment": true
-                },
-                "parent_id": {
-                    "type": "bigint",
-                    "unsigned": true,
-                    "nullable": true,
-                    "references": {
-                        "table": "categories",
-                        "field": "id",
-                        "on_delete": "set_null"
-                    }
-                },
-                "name": {
+                "model_type": {
                     "type": "string",
                     "length": 255
                 },
-                "slug": {
-                    "type": "string",
-                    "length": 255,
-                    "unique": true
-                },
-                "description": {
-                    "type": "text",
-                    "nullable": true
-                },
-                "created_at": {
-                    "type": "timestamp",
-                    "nullable": true
-                },
-                "updated_at": {
-                    "type": "timestamp",
-                    "nullable": true
-                }
-            }
-        },
-        "products": {
-            "model": "App\\Models\\Product",
-            "primary_key": [
-                "id"
-            ],
-            "fields": {
-                "id": {
+                "model_id": {
                     "type": "bigint",
-                    "unsigned": true,
-                    "auto_increment": true
-                },
-                "category_id": {
-                    "type": "bigint",
-                    "unsigned": true,
-                    "references": {
-                        "table": "categories",
-                        "field": "id",
-                        "on_delete": "restrict"
-                    }
-                },
-                "name": {
-                    "type": "string",
-                    "length": 255
-                },
-                "slug": {
-                    "type": "string",
-                    "length": 255,
-                    "unique": true
-                },
-                "price": {
-                    "type": "decimal",
-                    "precision": 10,
-                    "scale": 2
-                },
-                "stock": {
-                    "type": "integer",
-                    "unsigned": true,
-                    "default": 0
-                },
-                "status": {
-                    "type": "enum",
-                    "values": [
-                        "draft",
-                        "published",
-                        "archived"
-                    ],
-                    "default": "draft"
-                },
-                "is_featured": {
-                    "type": "boolean",
-                    "default": false
-                },
-                "metadata": {
-                    "type": "json",
-                    "nullable": true
-                },
-                "created_at": {
-                    "type": "timestamp",
-                    "nullable": true
-                },
-                "updated_at": {
-                    "type": "timestamp",
-                    "nullable": true
+                    "unsigned": true
                 }
             },
             "indexes": [
                 {
                     "columns": [
-                        "status"
-                    ]
-                },
-                {
-                    "columns": [
-                        "category_id",
-                        "status"
+                        "model_id",
+                        "model_type"
                     ]
                 }
             ]
         },
-        "tags": {
-            "model": "App\\Models\\Tag",
+        "model_has_permissions": {
+            "description": "Spatie polymorphic assignment of permissions to any model.",
             "primary_key": [
-                "id"
+                "permission_id",
+                "model_id",
+                "model_type"
             ],
             "fields": {
-                "id": {
+                "permission_id": {
                     "type": "bigint",
                     "unsigned": true,
-                    "auto_increment": true
+                    "references": {
+                        "table": "permissions",
+                        "field": "id",
+                        "on_delete": "cascade"
+                    }
                 },
-                "name": {
+                "model_type": {
                     "type": "string",
-                    "length": 100
+                    "length": 255
                 },
-                "slug": {
-                    "type": "string",
-                    "length": 100,
-                    "unique": true
-                },
-                "created_at": {
-                    "type": "timestamp",
-                    "nullable": true
-                },
-                "updated_at": {
-                    "type": "timestamp",
-                    "nullable": true
+                "model_id": {
+                    "type": "bigint",
+                    "unsigned": true
                 }
-            }
+            },
+            "indexes": [
+                {
+                    "columns": [
+                        "model_id",
+                        "model_type"
+                    ]
+                }
+            ]
         },
-        "product_tag": {
+        "role_has_permissions": {
             "primary_key": [
-                "product_id",
-                "tag_id"
+                "permission_id",
+                "role_id"
             ],
             "pivot": true,
             "fields": {
-                "product_id": {
+                "permission_id": {
                     "type": "bigint",
                     "unsigned": true,
                     "references": {
-                        "table": "products",
+                        "table": "permissions",
                         "field": "id",
                         "on_delete": "cascade"
                     }
                 },
-                "tag_id": {
+                "role_id": {
                     "type": "bigint",
                     "unsigned": true,
                     "references": {
-                        "table": "tags",
+                        "table": "roles",
                         "field": "id",
                         "on_delete": "cascade"
                     }
                 }
             }
-        },
-        "orders": {
-            "model": "App\\Models\\Order",
-            "primary_key": [
-                "id"
-            ],
-            "fields": {
-                "id": {
-                    "type": "bigint",
-                    "unsigned": true,
-                    "auto_increment": true
-                },
-                "user_id": {
-                    "type": "bigint",
-                    "unsigned": true,
-                    "references": {
-                        "table": "users",
-                        "field": "id",
-                        "on_delete": "restrict"
-                    }
-                },
-                "status": {
-                    "type": "enum",
-                    "values": [
-                        "pending",
-                        "paid",
-                        "shipped",
-                        "cancelled"
-                    ],
-                    "default": "pending"
-                },
-                "total": {
-                    "type": "decimal",
-                    "precision": 12,
-                    "scale": 2,
-                    "default": 0
-                },
-                "placed_at": {
-                    "type": "timestamp",
-                    "nullable": true
-                },
-                "created_at": {
-                    "type": "timestamp",
-                    "nullable": true
-                },
-                "updated_at": {
-                    "type": "timestamp",
-                    "nullable": true
-                }
-            }
-        },
-        "order_items": {
-            "model": "App\\Models\\OrderItem",
-            "primary_key": [
-                "id"
-            ],
-            "fields": {
-                "id": {
-                    "type": "bigint",
-                    "unsigned": true,
-                    "auto_increment": true
-                },
-                "order_id": {
-                    "type": "bigint",
-                    "unsigned": true,
-                    "references": {
-                        "table": "orders",
-                        "field": "id",
-                        "on_delete": "cascade"
-                    }
-                },
-                "product_id": {
-                    "type": "bigint",
-                    "unsigned": true,
-                    "references": {
-                        "table": "products",
-                        "field": "id",
-                        "on_delete": "restrict"
-                    }
-                },
-                "quantity": {
-                    "type": "integer",
-                    "unsigned": true,
-                    "default": 1
-                },
-                "unit_price": {
-                    "type": "decimal",
-                    "precision": 10,
-                    "scale": 2
-                },
-                "created_at": {
-                    "type": "timestamp",
-                    "nullable": true
-                },
-                "updated_at": {
-                    "type": "timestamp",
-                    "nullable": true
-                }
-            },
-            "indexes": [
-                {
-                    "columns": [
-                        "order_id",
-                        "product_id"
-                    ],
-                    "unique": true
-                }
-            ]
         }
     }
 }

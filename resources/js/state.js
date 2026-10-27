@@ -5,7 +5,7 @@
  * texto solo actualizan el grafo para no perder el foco del input.
  */
 
-import { clone, fkName, isSafeName, isSnakeCase, pivotName, singularize, studly } from './utils.js';
+import { clone, fkName, isLifecycleField, isSafeName, isSnakeCase, LIFECYCLE_FIELDS, pivotName, singularize, studly } from './utils.js';
 import { derive, lint } from './derive.js';
 
 const EMPTY_DOCUMENT = {
@@ -75,6 +75,10 @@ export class Store {
 
         if (!this.document.tables || typeof this.document.tables !== 'object' || Array.isArray(this.document.tables)) {
             this.document.tables = {};
+        }
+
+        for (const table of Object.values(this.document.tables)) {
+            orderTableFields(table);
         }
 
         this.hash = typeof data?.hash === 'string' ? data.hash : null;
@@ -228,6 +232,10 @@ export class Store {
                         type: 'timestamp',
                         nullable: true,
                     },
+                    deleted_at: {
+                        type: 'timestamp',
+                        nullable: true,
+                    },
                 },
             };
             this.selected = name;
@@ -318,6 +326,10 @@ export class Store {
     }
 
     addField(tableName) {
+        return this.addFieldAt(tableName, this.timestampStartIndex(tableName));
+    }
+
+    addFieldAt(tableName, index) {
         const table = this.table(tableName);
 
         if (!table) {
@@ -327,18 +339,47 @@ export class Store {
         const name = this.uniqueFieldName(tableName, 'new_field');
 
         this.mutate(() => {
-            if (!table.fields || typeof table.fields !== 'object') {
+            if (!table.fields || typeof table.fields !== 'object' || Array.isArray(table.fields)) {
                 table.fields = {};
             }
 
-            table.fields[name] = {
-                type: 'string',
-                length: 255,
-            };
+            const entries = Object.entries(table.fields);
+            const timestampStart = entries.findIndex(([fieldName]) => isLifecycleField(fieldName));
+            const position = timestampStart === -1 ? entries.length : timestampStart;
+            const target = Math.max(0, Math.min(index, position));
+
+            entries.splice(target, 0, [
+                name,
+                {
+                    type: 'string',
+                    length: 255,
+                },
+            ]);
+
+            table.fields = Object.fromEntries(entries);
+            orderTableFields(table);
             this.selected = tableName;
         });
 
         return name;
+    }
+
+    timestampStartIndex(tableName) {
+        const table = this.table(tableName);
+        const entries = Object.entries(table?.fields ?? {});
+        const index = entries.findIndex(([fieldName]) => isLifecycleField(fieldName));
+
+        return index === -1 ? entries.length : index;
+    }
+
+    insertFieldEntry(table, name, field) {
+        const entries = Object.entries(table.fields ?? {});
+        const timestampStart = entries.findIndex(([fieldName]) => isLifecycleField(fieldName));
+        const position = timestampStart === -1 ? entries.length : timestampStart;
+
+        entries.splice(position, 0, [name, field]);
+        table.fields = Object.fromEntries(entries);
+        orderTableFields(table);
     }
 
     deleteField(tableName, fieldName) {
@@ -406,6 +447,7 @@ export class Store {
             }
 
             table.fields = fields;
+            orderTableFields(table);
             table.primary_key = Array.isArray(table.primary_key)
                 ? table.primary_key.map((column) => (column === oldName ? newName : column))
                 : [];
@@ -477,12 +519,14 @@ export class Store {
     moveField(tableName, fieldName, offset) {
         const table = this.table(tableName);
 
-        if (!table?.fields || typeof table.fields !== 'object') {
+        if (!table?.fields || typeof table.fields !== 'object' || isLifecycleField(fieldName)) {
             return;
         }
 
         const entries = Object.entries(table.fields);
         const index = entries.findIndex(([name]) => name === fieldName);
+        const timestampStart = entries.findIndex(([name]) => isLifecycleField(name));
+        const limit = timestampStart === -1 ? entries.length : timestampStart;
 
         if (index === -1) {
             return;
@@ -490,7 +534,7 @@ export class Store {
 
         const target = index + offset;
 
-        if (target < 0 || target >= entries.length) {
+        if (target < 0 || target >= limit) {
             return;
         }
 
@@ -498,6 +542,7 @@ export class Store {
             const [entry] = entries.splice(index, 1);
             entries.splice(target, 0, entry);
             table.fields = Object.fromEntries(entries);
+            orderTableFields(table);
         });
     }
 
@@ -576,7 +621,7 @@ export class Store {
                 source.fields = {};
             }
 
-            source.fields[fieldName] = field;
+            this.insertFieldEntry(source, fieldName, field);
             this.selected = sourceName;
         });
 
@@ -734,4 +779,21 @@ export class Store {
     serialize() {
         return JSON.stringify(this.document, null, 2);
     }
+}
+
+function orderTableFields(table) {
+    if (!table?.fields || typeof table.fields !== 'object' || Array.isArray(table.fields)) {
+        return;
+    }
+
+    const entries = Object.entries(table.fields);
+    const regular = entries.filter(([name]) => !isLifecycleField(name));
+    const lifecycle = LIFECYCLE_FIELDS
+        .map((name) => [name, table.fields[name]])
+        .filter(([, field]) => field !== undefined);
+
+    table.fields = Object.fromEntries([
+        ...regular,
+        ...lifecycle,
+    ]);
 }

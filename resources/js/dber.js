@@ -47,6 +47,8 @@ class DberApp {
             redo: qs('#dber-redo'),
             live: qs('#dber-live'),
             liveLabel: qs('#dber-live-label'),
+            theme: qs('#dber-theme'),
+            themeIcon: qs('#dber-theme-icon'),
             addTable: qs('#dber-add-table'),
             search: qs('#dber-search'),
             tableList: qs('#dber-table-list'),
@@ -82,14 +84,18 @@ class DberApp {
         this.store.showPivots = this.showPivots;
         this.elements.showPivots.checked = this.showPivots;
 
+        this.theme = window.localStorage.getItem('dber:theme')
+            ?? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        this.applyTheme(this.theme, false);
+
         this.graph = new Graph({
             svg: this.elements.canvas,
             viewport: this.elements.viewport,
             edges: this.elements.edges,
             nodes: this.elements.nodes,
             storageKey: this.storageKey,
-            onSelect: (key) => this.store.setSelected(key),
-            onEdit: (key) => this.store.setSelected(key),
+            onSelect: (key) => this.openTable(key),
+            onEdit: (key) => this.openTable(key),
             onZoom: (percent) => {
                 this.elements.zoomLabel.textContent = `${percent}%`;
             },
@@ -193,6 +199,9 @@ class DberApp {
         this.elements.save.addEventListener('click', () => this.saveSchema());
         this.elements.undo.addEventListener('click', () => this.store.undo());
         this.elements.redo.addEventListener('click', () => this.store.redo());
+        this.elements.theme.addEventListener('click', () => {
+            this.applyTheme(this.theme === 'light' ? 'dark' : 'light');
+        });
 
         this.elements.addTable.addEventListener('click', () => this.addTable());
 
@@ -554,6 +563,45 @@ class DberApp {
             input?.focus();
             input?.select();
         }, 0);
+    }
+
+    openTable(key) {
+        if (key === null) {
+            this.store.setSelected(null);
+            return;
+        }
+
+        this.store.setSelected(key);
+        this.graph.setSelected(key);
+        this.graph.revealTable(key);
+        this.inspector.render();
+    }
+
+    applyTheme(theme, persist = true) {
+        this.theme = theme === 'light' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = this.theme;
+
+        if (persist) {
+            try {
+                window.localStorage.setItem('dber:theme', this.theme);
+            } catch {
+                // Ignorar almacenamiento no disponible.
+            }
+        }
+
+        if (this.elements.themeIcon) {
+            this.elements.themeIcon.textContent = this.theme === 'light' ? '☾' : '☀';
+        }
+
+        if (this.elements.theme) {
+            this.elements.theme.title = this.theme === 'light'
+                ? 'Switch to dark theme'
+                : 'Switch to light theme';
+            this.elements.theme.setAttribute('aria-pressed', this.theme === 'light' ? 'true' : 'false');
+        }
+
+        document.querySelector('meta[name="color-scheme"]')
+            ?.setAttribute('content', this.theme === 'light' ? 'light' : 'dark');
     }
 
     handleEmptyAction() {

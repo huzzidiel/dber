@@ -69,13 +69,17 @@ they usually point to a mistake.
    - A pivot table with two foreign keys → many-to-many.
 7. Mark join tables with `"pivot": true`. Their `primary_key` normally lists
    both foreign keys.
-8. Timestamps (`created_at`, `updated_at`) and soft deletes are explicit
-   fields. There are no hidden conventions.
+8. Timestamps (`created_at`, `updated_at`) and soft deletes (`deleted_at`) are
+   explicit fields. There are no hidden conventions. Keep `created_at`,
+   `updated_at` and `deleted_at` at the end of the field list, in that order.
 9. `description` is for humans only. Do not add AI instructions, prompts or
    comments table by table.
 10. Do not duplicate information that can be derived. If a relation is expressed
     by a foreign key, do not add a parallel `relations` list.
 11. Preserve unrelated tables and formatting. Prefer small, atomic changes.
+12. Tables with `model_type` and `model_id` are polymorphic. Keep both columns,
+    but do not add a foreign key to `model_id`; it can point to any model. Ask if
+    a concrete relation needs to be represented.
 
 ## Field properties
 
@@ -146,24 +150,24 @@ Create a pivot table, mark it with `"pivot": true`, add both foreign keys and
 make the pair the primary key:
 
 ```json
-"role_user": {
+"role_has_permissions": {
     "pivot": true,
-    "primary_key": ["role_id", "user_id"],
+    "primary_key": ["permission_id", "role_id"],
     "fields": {
+        "permission_id": {
+            "type": "bigint",
+            "unsigned": true,
+            "references": {
+                "table": "permissions",
+                "field": "id",
+                "on_delete": "cascade"
+            }
+        },
         "role_id": {
             "type": "bigint",
             "unsigned": true,
             "references": {
                 "table": "roles",
-                "field": "id",
-                "on_delete": "cascade"
-            }
-        },
-        "user_id": {
-            "type": "bigint",
-            "unsigned": true,
-            "references": {
-                "table": "users",
                 "field": "id",
                 "on_delete": "cascade"
             }

@@ -18,6 +18,12 @@ segunda lista de relaciones que se pueda desincronizar.
   comando o un agente, el diagrama se recarga solo.
 - **Editor visual** para crear tablas, campos, claves foráneas y tablas pivote.
   Guarda con `⌘S` y maneja conflictos si el archivo cambió en disco.
+- **Tema oscuro y claro** con un botón en la barra superior; la preferencia se
+  guarda en el navegador.
+- **Inserción de campos entre filas existentes**, no solo al final.
+- **Timestamps de ciclo de vida al final** (`created_at`, `updated_at`,
+  `deleted_at`), y `deleted_at` incluido en las tablas nuevas.
+- **Un clic en una tabla** abre el inspector lateral con su edición.
 - **Relaciones gráficas** con cardinalidad: uno a muchos, uno a uno y muchos a
   muchos, incluyendo tablas pivote y auto-referencias.
 - **Campos con tipo, longitud, precisión, valores enum, default, nullabilidad,
@@ -192,11 +198,14 @@ DBER_EDITOR=false
 6. Una relación muchos a muchos usa una tabla pivote con `"pivot": true`, al
    menos dos claves foráneas y una clave primaria compuesta.
 7. `created_at`, `updated_at` y `deleted_at` son campos explícitos. No hay
-   convenciones ocultas.
-8. `description` es opcional y exclusivamente para humanos. No se usa para
+   convenciones ocultas. Los tres se mantienen al final del listado de campos.
+8. Las tablas nuevas creadas desde el visor incluyen `created_at`, `updated_at`
+   y `deleted_at`. Las tablas de Spatie del ejemplo respetan sus migraciones
+   originales (solo `created_at` y `updated_at`).
+9. `description` es opcional y exclusivamente para humanos. No se usa para
    instrucciones de IA ni se genera automáticamente.
-9. Los nombres de tablas y columnas usan `snake_case`.
-10. Los índices compuestos se declaran en `indexes`; el editor visual los muestra
+10. Los nombres de tablas y columnas usan `snake_case`.
+11. Los índices compuestos se declaran en `indexes`; el editor visual los muestra
     y el JSON los conserva.
 
 ### Relaciones derivadas
@@ -212,7 +221,22 @@ Dber no guarda una lista paralela de relaciones. Las calcula así:
 Una tabla pivote puede tener columnas extra si el esquema las declara, pero la
 relación directa muchos-a-muchos solo se deriva cuando hay exactamente dos claves
 foráneas. Las claves foráneas de la tabla pivote siguen visibles cuando activas
-"Show pivot tables".
+"Show pivot tables on canvas".
+
+### Ejemplo incluido: Spatie Permission
+
+El instalador crea un esquema con:
+
+- `users` (incluye `deleted_at` para soft deletes).
+- `roles` y `permissions`, con `guard_name` y el índice único
+  `name + guard_name`.
+- `model_has_roles` y `model_has_permissions`, que son polimórficas: conservan
+  `model_type` y `model_id`, pero `model_id` no se declara como FK porque puede
+  apuntar a cualquier modelo.
+- `role_has_permissions`, la tabla pivote muchos-a-muchos entre roles y permisos.
+
+Las tablas de Spatie respetan sus migraciones originales: no incluyen
+`deleted_at`. Las tablas nuevas creadas desde el visor sí lo incluyen por defecto.
 
 ### Tipos de campo
 
@@ -258,23 +282,30 @@ editarlo a mano; Dber acepta `.json`, `.yaml` y `.yml`.
 
 La ruta principal es `/dber` (configurable).
 
-![Editor de tablas y relaciones](art/editor.png)
-
 - **Sidebar**: busca por tabla, campo, tipo o tabla referenciada.
 - **Canvas**: arrastra tablas, hace zoom con la rueda, panea con el fondo y hace
-  doble clic en una tabla para editarla. "Fit view" y "Auto arrange" reordenan el
-  diagrama.
+  clic en una tabla para abrir su inspector. "Fit view" y "Auto arrange"
+  reordenan el diagrama.
 - **Inspector**: edita la tabla, sus campos, la clave primaria, los flags y las
   claves foráneas. También muestra las relaciones derivadas y la zona de borrado.
+- **Insert field**: entre cada par de campos aparece una línea con
+  "+ Insert field" para crear un campo en esa posición. Los timestamps de ciclo
+  de vida se mantienen al final.
 - **Add relation**: crea la clave foránea o, para muchos-a-muchos, la tabla pivote.
 - **Show pivot tables**: oculta o muestra las tablas pivote en el canvas. Con las
   pivote ocultas, el diagrama dibuja la relación muchos-a-muchos directa con
   línea punteada. Las pivote siguen disponibles en la barra lateral para
   editarlas.
+- **Theme**: alterna entre tema oscuro y claro. La preferencia se guarda en
+  `localStorage`.
 - **Save**: escribe el archivo en disco y conserva el formato canónico. `⌘S` o
   `Ctrl+S` también guarda.
 - **Undo/redo**: `⌘Z` / `⇧⌘Z` (fuera de un input) o los botones de la barra.
 - **Export**: descarga el contexto de IA, el diagrama Mermaid o el JSON.
+
+![Editor de tablas y relaciones](art/editor.png)
+
+![Tema claro](art/light.png)
 
 Las posiciones de las tablas se guardan en `localStorage` del navegador. No se
 escriben dentro del archivo de esquema, para que el JSON siga siendo portable y

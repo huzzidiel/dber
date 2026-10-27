@@ -41,14 +41,46 @@ it('compiles the example schema without issues', function (): void {
 
     expect($compiled->issues)->toBeEmpty()
         ->and($compiled->hasErrors())->toBeFalse()
-        ->and($compiled->diagram->tables)->toHaveCount(10)
-        ->and($compiled->diagram->fieldCount())->toBe(59)
-        ->and($compiled->relations)->toHaveCount(12)
-        ->and($compiled->pivotTables)->toBe(['role_user', 'product_tag']);
+        ->and(array_keys($compiled->diagram->tables))->toBe([
+            'users',
+            'roles',
+            'permissions',
+            'model_has_roles',
+            'model_has_permissions',
+            'role_has_permissions',
+        ])
+        ->and($compiled->diagram->fieldCount())->toBe(27)
+        ->and($compiled->relations)->toHaveCount(5)
+        ->and($compiled->pivotTables)->toBe(['role_has_permissions']);
 });
 
 it('derives one-to-one and many-to-many relations', function (): void {
-    $compiled = dberCompile(dberBase());
+    $document = dberBase();
+    $document['tables']['profiles'] = [
+        'model' => 'App\\Models\\Profile',
+        'primary_key' => [
+            'id',
+        ],
+        'fields' => [
+            'id' => [
+                'type' => 'bigint',
+                'unsigned' => true,
+                'auto_increment' => true,
+            ],
+            'user_id' => [
+                'type' => 'bigint',
+                'unsigned' => true,
+                'unique' => true,
+                'references' => [
+                    'table' => 'users',
+                    'field' => 'id',
+                    'on_delete' => 'cascade',
+                ],
+            ],
+        ],
+    ];
+
+    $compiled = dberCompile($document);
     $kinds = array_map(static fn (Relation $relation): string => $relation->kind, $compiled->relations);
 
     expect($kinds)->toContain(Relation::ONE_TO_ONE)
@@ -94,13 +126,13 @@ it('rejects unknown field types', function (): void {
 
 it('rejects references to missing tables and fields', function (): void {
     $document = dberBase();
-    $document['tables']['orders']['fields']['user_id']['references']['table'] = 'missing';
-    $document['tables']['orders']['fields']['user_id']['references']['field'] = 'nope';
+    $document['tables']['model_has_roles']['fields']['role_id']['references']['table'] = 'missing';
+    $document['tables']['model_has_roles']['fields']['role_id']['references']['field'] = 'nope';
 
     $compiled = dberCompile($document);
     $paths = array_map(static fn ($issue): string => $issue->path, $compiled->errors());
 
-    expect($paths)->toContain('$.tables.orders.fields.user_id.references.table');
+    expect($paths)->toContain('$.tables.model_has_roles.fields.role_id.references.table');
 });
 
 it('rejects primary keys that do not exist', function (): void {
@@ -115,7 +147,7 @@ it('rejects primary keys that do not exist', function (): void {
 
 it('warns when a pivot table has fewer than two foreign keys', function (): void {
     $document = dberBase();
-    unset($document['tables']['role_user']['fields']['user_id']['references']);
+    unset($document['tables']['role_has_permissions']['fields']['role_id']['references']);
 
     $compiled = dberCompile($document);
     $warnings = array_values(array_filter(
@@ -125,41 +157,58 @@ it('warns when a pivot table has fewer than two foreign keys', function (): void
 
     expect($compiled->hasErrors())->toBeFalse()
         ->and(array_map(static fn ($issue): string => $issue->path, $warnings))
-        ->toContain('$.tables.role_user.pivot');
+        ->toContain('$.tables.role_has_permissions.pivot');
 });
 
 it('keeps explicit null defaults distinct from no default', function (): void {
     $document = dberBase();
-    $document['tables']['orders']['fields']['placed_at']['default'] = null;
+    $document['tables']['users']['fields']['remember_token']['default'] = null;
 
     $compiled = dberCompile($document);
-    $field = $compiled->diagram->tables['orders']->field('placed_at');
-    $status = $compiled->diagram->tables['orders']->field('status');
+    $field = $compiled->diagram->tables['users']->field('remember_token');
+    $named = $compiled->diagram->tables['users']->field('name');
 
     expect($field)->not->toBeNull()
         ->and($field->hasDefault)->toBeTrue()
         ->and($field->default)->toBeNull()
-        ->and($status)->not->toBeNull()
-        ->and($status->hasDefault)->toBeTrue();
+        ->and($named)->not->toBeNull()
+        ->and($named->hasDefault)->toBeFalse();
 });
 
 it('supports composite primary keys', function (): void {
     $compiled = dberCompile(dberBase());
-    $pivot = $compiled->diagram->tables['role_user'];
+    $pivot = $compiled->diagram->tables['role_has_permissions'];
 
-    expect($pivot->primaryKey)->toBe(['role_id', 'user_id'])
+    expect($pivot->primaryKey)->toBe(['permission_id', 'role_id'])
         ->and($pivot->pivot)->toBeTrue();
+});
+
+it('keeps lifecycle timestamps at the end of the field list', function (): void {
+    $document = dberBase();
+    $document['tables']['users']['fields'] = array_reverse(
+        $document['tables']['users']['fields'],
+        true,
+    );
+
+    $compiled = dberCompile($document);
+    $names = array_keys($compiled->document['tables']['users']['fields']);
+
+    expect(array_slice($names, -3))->toBe([
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    ]);
 });
 
 it('exports markdown with tables and relationships', function (): void {
     $compiled = dberCompile(dberBase());
     $markdown = (new MarkdownExporter())->export($compiled, 'diagram-er/base.json');
 
-    expect($markdown)->toContain('# Database schema: Dber Demo Store')
+    expect($markdown)->toContain('# Database schema: Laravel application')
         ->and($markdown)->toContain('## How to read and edit this schema')
-        ->and($markdown)->toContain('### `orders`')
-        ->and($markdown)->toContain('many-to-many via `role_user`')
-        ->and($markdown)->toContain('`orders.user_id` → `users.id`');
+        ->and($markdown)->toContain('### `users`')
+        ->and($markdown)->toContain('many-to-many via `role_has_permissions`')
+        ->and($markdown)->toContain('`model_has_roles.role_id` → `roles.id`');
 });
 
 it('exports valid mermaid syntax', function (): void {
@@ -169,8 +218,8 @@ it('exports valid mermaid syntax', function (): void {
     expect($mermaid)->toStartWith('erDiagram')
         ->and($mermaid)->toContain('users {')
         ->and($mermaid)->toContain('BIGINT id PK')
-        ->and($mermaid)->toContain('users ||--o{ orders : "user_id"')
-        ->and($mermaid)->toContain('Many-to-many via role_user');
+        ->and($mermaid)->toContain('roles ||--o{ model_has_roles : "role_id"')
+        ->and($mermaid)->toContain('Many-to-many via role_has_permissions');
 });
 
 it('maps types to laravel migration methods', function (): void {

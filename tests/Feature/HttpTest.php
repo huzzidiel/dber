@@ -18,11 +18,11 @@ it('returns the compiled schema payload', function (): void {
         ->assertOk()
         ->assertJsonPath('status', 'success')
         ->assertJsonPath('data.exists', true)
-        ->assertJsonPath('data.stats.tables', 10)
-        ->assertJsonPath('data.stats.pivots', 2);
+        ->assertJsonPath('data.stats.tables', 6)
+        ->assertJsonPath('data.stats.pivots', 1);
 
     expect($response->json('data.hash'))->toBe($hash)
-        ->and($response->json('data.relations'))->toHaveCount(12)
+        ->and($response->json('data.relations'))->toHaveCount(5)
         ->and($response->json('data.document.tables.users.fields.email.unique'))->toBeTrue();
 });
 
@@ -137,9 +137,9 @@ it('exports the AI context as markdown', function (): void {
 
     expect($contents)->toContain('## Tables')
         ->and($contents)->toContain('## Relationships')
-        ->and($contents)->toContain('role_user')
+        ->and($contents)->toContain('role_has_permissions')
         ->and($contents)->toContain('many-to-many')
-        ->and($contents)->toContain('### `orders`');
+        ->and($contents)->toContain('### `roles`');
 });
 
 it('exports a mermaid diagram', function (): void {
@@ -153,7 +153,7 @@ it('exports a mermaid diagram', function (): void {
 
     expect($contents)->toContain('erDiagram')
         ->and($contents)->toContain('users {')
-        ->and($contents)->toContain('orders {');
+        ->and($contents)->toContain('roles {');
 });
 
 it('refuses to export an invalid schema', function (): void {

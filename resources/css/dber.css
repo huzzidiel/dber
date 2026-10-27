@@ -24,6 +24,7 @@
     --dber-shadow: 0 18px 50px rgba(0, 0, 0, 0.42);
     --dber-font: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --dber-mono: "SFMono-Regular", ui-monospace, "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+    color-scheme: dark;
 }
 
 * {
@@ -1225,6 +1226,44 @@ a {
     opacity: 0.6;
 }
 
+.dber-field-insert {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    padding: 2px 0;
+    margin: 1px 0 8px;
+    border: 0;
+    color: var(--dber-faint);
+    background: transparent;
+    opacity: 0.55;
+    transition: opacity 120ms ease, color 120ms ease;
+}
+
+.dber-field-insert:hover,
+.dber-field-insert:focus-visible {
+    color: var(--dber-accent);
+    opacity: 1;
+}
+
+.dber-field-insert:disabled {
+    cursor: not-allowed;
+    opacity: 0.12;
+}
+
+.dber-field-insert-line {
+    flex: 1;
+    height: 1px;
+    background: var(--dber-line);
+}
+
+.dber-field-insert-label {
+    flex: 0 0 auto;
+    font-family: var(--dber-mono);
+    font-size: 9px;
+    letter-spacing: 0.03em;
+}
+
 .dber-pill {
     display: inline-flex;
     align-items: center;
@@ -1494,7 +1533,340 @@ a {
     background-clip: padding-box;
 }
 
-/* Responsive -------------------------------------------------------------- */
+/* Light theme ------------------------------------------------------------- */
+
+html[data-theme="light"] {
+    --dber-bg: #f3f6fa;
+    --dber-bg-grid: rgba(15, 23, 42, 0.055);
+    --dber-panel: #ffffff;
+    --dber-panel-2: #f8fafc;
+    --dber-panel-3: #eef2f7;
+    --dber-line: rgba(15, 23, 42, 0.12);
+    --dber-line-strong: rgba(15, 23, 42, 0.24);
+    --dber-text: #0f172a;
+    --dber-muted: #475569;
+    --dber-faint: #64748b;
+    --dber-accent: #0f766e;
+    --dber-accent-strong: #0d9488;
+    --dber-accent-soft: rgba(13, 148, 136, 0.1);
+    --dber-pink: #db2777;
+    --dber-pink-soft: rgba(219, 39, 119, 0.08);
+    --dber-amber: #b45309;
+    --dber-red: #e11d48;
+    --dber-red-soft: rgba(225, 29, 72, 0.08);
+    --dber-green: #15803d;
+    --dber-blue: #2563eb;
+    --dber-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+    color-scheme: light;
+}
+
+html[data-theme="light"] #dber-app {
+    background:
+        radial-gradient(circle at 18% -10%, rgba(13, 148, 136, 0.09), transparent 42%),
+        radial-gradient(circle at 92% 8%, rgba(219, 39, 119, 0.06), transparent 36%),
+        var(--dber-bg);
+}
+
+html[data-theme="light"] .dber-topbar {
+    background: rgba(255, 255, 255, 0.88);
+}
+
+html[data-theme="light"] .dber-logo {
+    border-color: rgba(13, 148, 136, 0.26);
+    background: rgba(13, 148, 136, 0.08);
+}
+
+html[data-theme="light"] .dber-live {
+    background: rgba(255, 255, 255, 0.6);
+}
+
+html[data-theme="light"] .dber-dirty {
+    color: var(--dber-amber);
+    background: rgba(180, 83, 9, 0.1);
+}
+
+html[data-theme="light"] .dber-btn {
+    background: rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme="light"] .dber-btn:hover:not(:disabled) {
+    background: var(--dber-panel-3);
+}
+
+html[data-theme="light"] .dber-btn-primary:disabled {
+    border-color: var(--dber-line);
+    color: var(--dber-faint);
+    background: rgba(15, 23, 42, 0.05);
+}
+
+html[data-theme="light"] .dber-icon-btn:hover:not(:disabled) {
+    background: rgba(15, 23, 42, 0.06);
+}
+
+html[data-theme="light"] .dber-menu-panel {
+    background: #ffffff;
+}
+
+html[data-theme="light"] .dber-menu-panel a:hover,
+html[data-theme="light"] .dber-menu-panel button:hover {
+    background: rgba(15, 23, 42, 0.06);
+}
+
+html[data-theme="light"] .dber-issues {
+    border-bottom-color: rgba(225, 29, 72, 0.22);
+    background: rgba(255, 241, 242, 0.94);
+}
+
+html[data-theme="light"] .dber-issues.is-warning {
+    border-bottom-color: rgba(180, 83, 9, 0.22);
+    background: rgba(255, 251, 235, 0.94);
+}
+
+html[data-theme="light"] .dber-issues:not(.is-warning) .dber-issues-head {
+    color: #be123c;
+}
+
+html[data-theme="light"] .dber-issues.is-warning .dber-issues-head {
+    color: #b45309;
+}
+
+html[data-theme="light"] .dber-issue {
+    color: #9f1239;
+}
+
+html[data-theme="light"] .dber-issues.is-warning .dber-issue {
+    color: #92400e;
+}
+
+html[data-theme="light"] .dber-issue-path {
+    color: rgba(15, 23, 42, 0.7);
+    background: rgba(15, 23, 42, 0.06);
+}
+
+html[data-theme="light"] .dber-sidebar {
+    background: rgba(255, 255, 255, 0.64);
+}
+
+html[data-theme="light"] .dber-search-wrap input {
+    background: #ffffff;
+}
+
+html[data-theme="light"] .dber-table-item:hover {
+    background: rgba(15, 23, 42, 0.05);
+}
+
+html[data-theme="light"] .dber-table-item.is-active {
+    border-color: rgba(13, 148, 136, 0.26);
+    background: rgba(13, 148, 136, 0.08);
+}
+
+html[data-theme="light"] .dber-canvas-wrap {
+    background-image:
+        linear-gradient(var(--dber-bg-grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--dber-bg-grid) 1px, transparent 1px),
+        radial-gradient(circle at 50% 45%, rgba(13, 148, 136, 0.045), transparent 55%);
+}
+
+html[data-theme="light"] .dber-canvas-hint {
+    background: rgba(255, 255, 255, 0.82);
+}
+
+html[data-theme="light"] .dber-node-bg {
+    fill: #ffffff;
+    stroke: rgba(15, 23, 42, 0.18);
+    filter: drop-shadow(0 12px 24px rgba(15, 23, 42, 0.11));
+}
+
+html[data-theme="light"] .dber-node-header {
+    fill: #f1f5f9;
+}
+
+html[data-theme="light"] .dber-node.is-pivot .dber-node-bg {
+    stroke: rgba(219, 39, 119, 0.4);
+}
+
+html[data-theme="light"] .dber-node.is-pivot .dber-node-header {
+    fill: #fdf2f8;
+}
+
+html[data-theme="light"] .dber-node.is-selected .dber-node-bg {
+    stroke: var(--dber-accent);
+}
+
+html[data-theme="light"] .dber-node.is-selected .dber-node-header {
+    fill: #ccfbf1;
+}
+
+html[data-theme="light"] .dber-node.is-match .dber-node-bg {
+    stroke: rgba(13, 148, 136, 0.72);
+}
+
+html[data-theme="light"] .dber-node:hover .dber-node-bg {
+    stroke: rgba(13, 148, 136, 0.55);
+}
+
+html[data-theme="light"] .dber-node-title {
+    fill: #0f172a;
+}
+
+html[data-theme="light"] .dber-node-badge {
+    fill: #475569;
+}
+
+html[data-theme="light"] .dber-node-badge.is-pivot {
+    fill: #be185d;
+}
+
+html[data-theme="light"] .dber-node-model {
+    fill: #64748b;
+}
+
+html[data-theme="light"] .dber-node-divider {
+    stroke: rgba(15, 23, 42, 0.11);
+}
+
+html[data-theme="light"] .dber-node-footer {
+    fill: #64748b;
+}
+
+html[data-theme="light"] .dber-field-key.is-pk {
+    fill: #b45309;
+}
+
+html[data-theme="light"] .dber-field-key.is-fk,
+html[data-theme="light"] .dber-field-key.is-pk-fk {
+    fill: #be185d;
+}
+
+html[data-theme="light"] .dber-field-name {
+    fill: #1e293b;
+}
+
+html[data-theme="light"] .dber-field-name.is-fk {
+    fill: #9d174d;
+}
+
+html[data-theme="light"] .dber-field-type {
+    fill: #64748b;
+}
+
+html[data-theme="light"] .dber-field-default {
+    fill: #94a3b8;
+}
+
+html[data-theme="light"] .dber-edge-line {
+    stroke: rgba(13, 148, 136, 0.5);
+}
+
+html[data-theme="light"] .dber-edge-marker {
+    stroke: rgba(13, 148, 136, 0.82);
+}
+
+html[data-theme="light"] .dber-edge.is-many-to-many .dber-edge-line {
+    stroke: rgba(219, 39, 119, 0.55);
+}
+
+html[data-theme="light"] .dber-edge.is-many-to-many .dber-edge-marker {
+    stroke: rgba(219, 39, 119, 0.78);
+}
+
+html[data-theme="light"] .dber-edge-label-bg {
+    fill: #ffffff;
+    stroke: rgba(15, 23, 42, 0.15);
+}
+
+html[data-theme="light"] .dber-edge-label {
+    fill: #475569;
+}
+
+html[data-theme="light"] .dber-edge.is-many-to-many .dber-edge-label {
+    fill: #be185d;
+}
+
+html[data-theme="light"] .dber-empty {
+    background: rgba(248, 250, 252, 0.55);
+}
+
+html[data-theme="light"] .dber-empty-card {
+    background: linear-gradient(180deg, #ffffff, #f8fafc);
+}
+
+html[data-theme="light"] .dber-inspector {
+    background: var(--dber-panel-2);
+    box-shadow: -18px 0 46px rgba(15, 23, 42, 0.08);
+}
+
+html[data-theme="light"] .dber-inspector-head,
+html[data-theme="light"] .dber-inspector-foot {
+    background: rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme="light"] .dber-input,
+html[data-theme="light"] .dber-select,
+html[data-theme="light"] .dber-textarea {
+    background: #ffffff;
+}
+
+html[data-theme="light"] .dber-field-card {
+    background: rgba(248, 250, 252, 0.82);
+}
+
+html[data-theme="light"] .dber-field-card.is-selected {
+    border-color: rgba(13, 148, 136, 0.3);
+    background: rgba(240, 253, 250, 0.9);
+}
+
+html[data-theme="light"] .dber-ref-box {
+    border-color: rgba(219, 39, 119, 0.2);
+    background: rgba(253, 242, 248, 0.6);
+}
+
+html[data-theme="light"] .dber-note {
+    background: rgba(15, 23, 42, 0.035);
+}
+
+html[data-theme="light"] .dber-relation {
+    background: rgba(15, 23, 42, 0.025);
+}
+
+html[data-theme="light"] .dber-pill.is-pk {
+    color: #92400e;
+    background: rgba(180, 83, 9, 0.1);
+}
+
+html[data-theme="light"] .dber-pill.is-fk,
+html[data-theme="light"] .dber-pill.is-pivot {
+    color: #9d174d;
+    background: rgba(219, 39, 119, 0.08);
+}
+
+html[data-theme="light"] .dber-pill.is-unique {
+    color: #1d4ed8;
+    background: rgba(37, 99, 235, 0.08);
+}
+
+html[data-theme="light"] .dber-pill.is-muted {
+    background: rgba(15, 23, 42, 0.06);
+}
+
+html[data-theme="light"] .dber-modal-backdrop {
+    background: rgba(15, 23, 42, 0.38);
+}
+
+html[data-theme="light"] .dber-toast {
+    background: rgba(255, 255, 255, 0.97);
+}
+
+html[data-theme="light"] .dber-field-insert-line {
+    background: rgba(15, 23, 42, 0.12);
+}
+
+html[data-theme="light"] .dber-table-list::-webkit-scrollbar-thumb,
+html[data-theme="light"] .dber-inspector-body::-webkit-scrollbar-thumb,
+html[data-theme="light"] .dber-issues::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.16);
+}
+
 
 @media (max-width: 1180px) {
     .dber-sidebar {

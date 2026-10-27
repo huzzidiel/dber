@@ -6,6 +6,7 @@ import {
     clear,
     el,
     formatDefault,
+    isLifecycleField,
     parseDefaultInput,
     pivotName,
 } from './utils.js';
@@ -220,6 +221,7 @@ export class Inspector {
 
     renderFieldsSection(key, table) {
         const list = el('div');
+        const timestampStart = table.fields.findIndex((field) => isLifecycleField(field.name));
 
         if (table.fields.length === 0) {
             list.appendChild(el('div', {
@@ -230,6 +232,32 @@ export class Inspector {
 
         table.fields.forEach((field, index) => {
             list.appendChild(this.renderFieldCard(key, table, field, index));
+
+            const beforeTimestamps = timestampStart === -1
+                ? index < table.fields.length - 1
+                : index < timestampStart;
+
+            if (beforeTimestamps) {
+                list.appendChild(el('button', {
+                    type: 'button',
+                    className: 'dber-field-insert',
+                    title: 'Insert field here',
+                    disabled: !this.store.editable,
+                    onclick: () => {
+                        const name = this.store.addFieldAt(key, index + 1);
+
+                        window.setTimeout(() => {
+                            const input = this.root.querySelector(`[data-field="${cssEscape(name)}"] [data-field-name]`);
+                            input?.focus();
+                            input?.select();
+                        }, 0);
+                    },
+                }, [
+                    el('span', { className: 'dber-field-insert-line' }),
+                    el('span', { className: 'dber-field-insert-label', text: '+ Insert field' }),
+                    el('span', { className: 'dber-field-insert-line' }),
+                ]));
+            }
         });
 
         const addButton = el('button', {
@@ -253,7 +281,7 @@ export class Inspector {
             [
                 el('p', {
                     className: 'dber-section-hint',
-                    text: 'Foreign keys live on the referencing field. Relations and inverse sides are derived automatically.',
+                    text: 'Foreign keys live on the referencing field. Relations are derived automatically. Lifecycle timestamps stay at the end.',
                 }),
                 list,
             ],
@@ -267,6 +295,9 @@ export class Inspector {
         if (!raw) {
             return el('div');
         }
+
+        const timestampStart = table.fields.findIndex((item) => isLifecycleField(item.name));
+        const lastDataIndex = timestampStart === -1 ? table.fields.length - 1 : timestampStart - 1;
 
         const card = el('div', {
             className: `dber-field-card${field.primary ? ' is-selected' : ''}`,
@@ -286,7 +317,7 @@ export class Inspector {
                 className: 'dber-icon-btn',
                 title: 'Move up',
                 text: '↑',
-                disabled: !this.store.editable || index === 0,
+                disabled: !this.store.editable || index === 0 || isLifecycleField(field.name),
                 onclick: () => this.store.moveField(tableKey, field.name, -1),
             }),
             el('button', {
@@ -294,7 +325,7 @@ export class Inspector {
                 className: 'dber-icon-btn',
                 title: 'Move down',
                 text: '↓',
-                disabled: !this.store.editable || index === table.fields.length - 1,
+                disabled: !this.store.editable || index >= lastDataIndex || isLifecycleField(field.name),
                 onclick: () => this.store.moveField(tableKey, field.name, 1),
             }),
             el('button', {
