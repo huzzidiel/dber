@@ -30,6 +30,7 @@
     id="dber-app"
     data-data-url="{{ $dataUrl }}"
     data-save-url="{{ $saveUrl }}"
+    data-import-url="{{ $importUrl }}"
     data-context-url="{{ $contextUrl }}"
     data-mermaid-url="{{ $mermaidUrl }}"
     data-editable="{{ $editable ? '1' : '0' }}"
@@ -147,6 +148,13 @@
                 title="Save schema (⌘S)"
                 disabled
             >Save</button>
+
+            <button
+                id="dber-import"
+                type="button"
+                class="dber-btn"
+                title="Build the diagram from the existing migrations"
+            >Import migrations</button>
 
             <div class="dber-menu">
                 <button

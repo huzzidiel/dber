@@ -31,6 +31,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Migrations directory
+    |--------------------------------------------------------------------------
+    |
+    | Directory scanned by `dber:import` and the "Import migrations" button in
+    | the viewer to build the schema from the existing migrations.
+    |
+    */
+
+    'migrations_path' => env('DBER_MIGRATIONS_PATH', database_path('migrations')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Route
     |--------------------------------------------------------------------------
     */

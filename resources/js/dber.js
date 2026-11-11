@@ -45,6 +45,7 @@ class DberApp {
             save: qs('#dber-save'),
             undo: qs('#dber-undo'),
             redo: qs('#dber-redo'),
+            import: qs('#dber-import'),
             live: qs('#dber-live'),
             liveLabel: qs('#dber-live-label'),
             theme: qs('#dber-theme'),
@@ -184,6 +185,12 @@ class DberApp {
                     this.updateLive();
                     break;
 
+                case 'import':
+                    this.transientIssues = [];
+                    this.loadError = null;
+                    this.syncAll();
+                    break;
+
                 case 'conflict':
                     this.updateLive();
                     this.refreshIssues(true);
@@ -202,6 +209,8 @@ class DberApp {
         this.elements.theme.addEventListener('click', () => {
             this.applyTheme(this.theme === 'light' ? 'dark' : 'light');
         });
+
+        this.elements.import.addEventListener('click', () => this.openImportModal());
 
         this.elements.addTable.addEventListener('click', () => this.addTable());
 
@@ -577,6 +586,85 @@ class DberApp {
         this.inspector.render();
     }
 
+    openImportModal() {
+        if (!this.store.editable) {
+            return;
+        }
+
+        const keepExtra = el('input', {
+            type: 'checkbox',
+        });
+
+        const body = el('div', {}, [
+            el('p', {
+                text: 'Build the diagram from your existing migrations. Columns removed by a migration are removed from the schema.',
+            }),
+            el('label', { className: 'dber-check' }, [
+                keepExtra,
+                el('span', { text: 'Keep columns not found in migrations' }),
+            ]),
+        ]);
+
+        const error = el('p', {
+            className: 'dber-note',
+            style: 'display:none; color:var(--dber-red); border-color:rgba(225,29,72,.3); margin-top:10px;',
+        });
+        body.appendChild(error);
+
+        let close = () => {};
+
+        const run = el('button', {
+            type: 'button',
+            className: 'dber-btn dber-btn-primary',
+            text: 'Import',
+        });
+
+        run.addEventListener('click', async () => {
+            run.disabled = true;
+            error.style.display = 'none';
+
+            try {
+                const data = await this.api.importMigrations({ prune: !keepExtra.checked });
+                close();
+                this.store.applyImported(data.document);
+                this.notify(this.importSummary(data.summary), 'success');
+            } catch (exception) {
+                run.disabled = false;
+                error.style.display = 'block';
+                error.textContent = exception?.message ?? 'The import failed.';
+            }
+        });
+
+        const modal = this.inspector.showModal({
+            title: 'Import migrations',
+            body,
+            footer: [
+                el('button', {
+                    type: 'button',
+                    className: 'dber-btn',
+                    text: 'Cancel',
+                    onclick: () => close(),
+                }),
+                run,
+            ],
+        });
+
+        close = modal.close;
+    }
+
+    importSummary(summary = {}) {
+        const parts = [
+            `${summary.tables ?? 0} tables`,
+            `${summary.fields ?? 0} fields`,
+        ];
+
+        if ((summary.warnings ?? 0) > 0) {
+            parts.push(`${summary.warnings} warnings`);
+        }
+
+        return `Imported ${parts.join(', ')}.`;
+    }
+
     applyTheme(theme, persist = true) {
         this.theme = theme === 'light' ? 'light' : 'dark';
         document.documentElement.dataset.theme = this.theme;
@@ -755,6 +843,7 @@ class DberApp {
         this.elements.undo.disabled = !this.store.editable || this.store.history.length === 0;
         this.elements.redo.disabled = !this.store.editable || this.store.future.length === 0;
         this.elements.addTable.disabled = !this.store.editable;
+        this.elements.import.disabled = !this.store.editable;
         this.elements.showPivots.checked = this.store.showPivots;
         this.elements.emptyPath.textContent = this.store.path || this.schemaPath;
 

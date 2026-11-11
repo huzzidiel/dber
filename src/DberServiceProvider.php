@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Huzzidiel\Dber;
 
 use Huzzidiel\Dber\Console\ExportCommand;
+use Huzzidiel\Dber\Console\ImportMigrationsCommand;
 use Huzzidiel\Dber\Console\InstallCommand;
 use Huzzidiel\Dber\Console\ValidateCommand;
 use Huzzidiel\Dber\Support\DiagramRepository;
@@ -53,6 +54,7 @@ final class DberServiceProvider extends ServiceProvider
                 InstallCommand::class,
                 ValidateCommand::class,
                 ExportCommand::class,
+                ImportMigrationsCommand::class,
             ]);
         }
     }

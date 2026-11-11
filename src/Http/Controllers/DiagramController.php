@@ -12,6 +12,7 @@ use Huzzidiel\Dber\Exceptions\InvalidDiagramException;
 use Huzzidiel\Dber\Support\DiagramRepository;
 use Huzzidiel\Dber\Support\MarkdownExporter;
 use Huzzidiel\Dber\Support\MermaidExporter;
+use Huzzidiel\Dber\Support\MigrationImporter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,6 +29,7 @@ final class DiagramController
         private readonly DiagramRepository $repository,
         private readonly MarkdownExporter $markdownExporter,
         private readonly MermaidExporter $mermaidExporter,
+        private readonly MigrationImporter $migrationImporter,
     ) {
     }
 
@@ -36,6 +38,7 @@ final class DiagramController
         return view('dber::diagram', [
             'dataUrl' => route('dber.data'),
             'saveUrl' => route('dber.data.update'),
+            'importUrl' => route('dber.import'),
             'contextUrl' => route('dber.context'),
             'mermaidUrl' => route('dber.mermaid'),
             'jsUrl' => route('dber.asset', ['path' => 'js/dber.js']),
@@ -115,6 +118,35 @@ final class DiagramController
         }
 
         return $this->success('Schema saved.', $this->payload($compiled));
+    }
+
+    public function import(Request $request): JsonResponse
+    {
+        if (! (bool) config('dber.editor')) {
+            return $this->error('The diagram editor is disabled.', [], 403);
+        }
+
+        $existing = [];
+
+        try {
+            $existing = $this->repository->load()->document;
+        } catch (InvalidDiagramException) {
+            $existing = [];
+        }
+
+        $path = (string) config('dber.migrations_path', database_path('migrations'));
+        $result = $this->migrationImporter->import(
+            $path,
+            $existing,
+            $request->boolean('prune', true),
+        );
+
+        return $this->success('Schema generated from migrations.', [
+            'document' => $result['document'],
+            'summary' => $result['summary'],
+            'issues' => $result['issues'],
+            'warnings' => $result['warnings'],
+        ]);
     }
 
     public function context(): Response|JsonResponse

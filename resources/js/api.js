@@ -16,6 +16,7 @@ export class Api {
     constructor(root) {
         this.dataUrl = root.dataset.dataUrl;
         this.saveUrl = root.dataset.saveUrl;
+        this.importUrl = root.dataset.importUrl;
         this.contextUrl = root.dataset.contextUrl;
         this.mermaidUrl = root.dataset.mermaidUrl;
         this.csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
@@ -36,6 +37,13 @@ export class Api {
                 hash,
                 force,
             }),
+        });
+    }
+
+    async importMigrations(options = {}) {
+        return this.request(this.importUrl, {
+            method: 'POST',
+            body: JSON.stringify(options),
         });
     }
 

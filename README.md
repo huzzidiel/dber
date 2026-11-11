@@ -31,6 +31,8 @@ segunda lista de relaciones que se pueda desincronizar.
 - **Contexto global para IA** generado desde el esquema, más `AGENTS.md` y un
   JSON Schema para que el agente sepa leer y actualizar el archivo.
 - **Validación** con `php artisan dber:validate` y desde el endpoint de guardado.
+- **Importar desde migraciones** con el botón “Import migrations” o
+  `php artisan dber:import`, incluyendo alteraciones posteriores de tablas.
 - **Exportación** a Markdown para IA, Mermaid y JSON canónico.
 - **Cero dependencias de frontend**: SVG, CSS y JavaScript propios, sin npm, sin
   CDN y sin build step.
@@ -107,6 +109,7 @@ Variables principales:
 | `DBER_ROUTE_DOMAIN` | `null` | Dominio opcional. |
 | `DBER_POLL_INTERVAL` | `1500` | Milisegundos entre comprobaciones del archivo. |
 | `DBER_MAX_SIZE` | `2097152` | Tamaño máximo del archivo en bytes. |
+| `DBER_MIGRATIONS_PATH` | `database/migrations` | Directorio que escanea `dber:import`. |
 
 El middleware de las rutas se configura en `dber.route.middleware` y por defecto
 es `web`. El prefijo y el dominio también se pueden cambiar desde el archivo de
@@ -323,6 +326,55 @@ Cada carga incluye un hash del archivo. Antes de guardar se envía ese hash:
 - El guardado nunca escribe un archivo inválido: si la validación falla, responde
   `422` con los errores y conserva el original.
 
+## Importar desde migraciones
+
+Dber puede construir el diagrama a partir de las migraciones existentes sin
+ejecutarlas ni tocar la base de datos.
+
+### Botón
+
+En la barra superior del visor, pulsa **Import migrations**. Se abre un modal con
+un resumen y la opción **Keep columns not found in migrations**. Al confirmar, el
+documento se carga en el editor (sin guardar); revisa el resultado y pulsa
+**Save**.
+
+### Comando
+
+```bash
+php artisan dber:import
+php artisan dber:import --dry-run
+php artisan dber:import --keep-extra
+php artisan dber:import --path=database/migrations
+```
+
+### Cómo funciona
+
+1. Lee `database/migrations/*.php` ordenados por nombre.
+2. Aplica en orden `Schema::create`, `Schema::table`, `Schema::drop` y
+   `Schema::rename`, incluyendo:
+   - agregar, renombrar y eliminar columnas;
+   - tipos, longitudes, precisión, valores enum, `nullable`, `unsigned`,
+     `default` y `autoIncrement`;
+   - claves primarias, únicas e índices;
+   - claves foráneas (`foreignId()->constrained()`, `foreign()->references()->on()`);
+   - `timestamps`, `nullableTimestamps`, `softDeletes`, `rememberToken` y `morphs`.
+3. Fusiona el resultado con el `base.json` actual:
+   - conserva `model`, `description`, `name` y `database`;
+   - elimina las columnas que las migraciones ya no declaran (salvo `--keep-extra`);
+   - detecta tablas pivote (dos claves foráneas con clave primaria compuesta).
+4. Valida el esquema resultante con las mismas reglas del guardado.
+
+El endpoint `POST /dber/import` devuelve el documento generado, un resumen y las
+advertencias.
+
+### Limitaciones
+
+- Es un parser estático: las construcciones dinámicas (variables, bucles,
+  condicionales) se marcan como advertencia y se omiten.
+- Las claves foráneas compuestas y algunos índices con nombre no se mapean; se
+  informan como advertencias.
+- No ejecuta SQL; interpreta el DSL estándar de Laravel.
+
 ## Uso con agentes de IA
 
 El paquete está diseñado para que un agente entienda el esquema sin documentación
@@ -380,6 +432,7 @@ Todas las rutas usan el prefijo configurado (`dber` por defecto).
 | `GET` | `/dber` | Visor/editor. |
 | `GET` | `/dber/data` | Documento normalizado, relaciones, issues, hash y estadísticas. |
 | `PUT` | `/dber/data` | Guarda `{ document, hash, force? }`. |
+| `POST` | `/dber/import` | Genera el documento desde las migraciones. |
 | `GET` | `/dber/context.md` | Contexto Markdown para IA. |
 | `GET` | `/dber/diagram.mmd` | Diagrama Mermaid. |
 | `GET` | `/dber/schema.json` | JSON Schema publicado o el del paquete. |
@@ -423,6 +476,8 @@ php artisan dber:export context
 php artisan dber:export mermaid
 php artisan dber:export json
 php artisan dber:export context --path=diagram-er/CONTEXT.md
+php artisan dber:import
+php artisan dber:import --dry-run
 ```
 
 `dber:validate` devuelve código de salida distinto de cero si hay errores. Las
@@ -452,7 +507,7 @@ src/
 ├── Data/              # DTOs tipados: Diagram, Table, Field, Relation...
 ├── Exceptions/        # archivo inválido, conflicto de hash
 ├── Http/Controllers/  # visor, datos, assets
-├── Support/           # normalizador, validador, repositorio, exporters
+├── Support/           # normalizador, validador, repositorio, importador, exporters
 └── DberServiceProvider.php
 config/dber.php
 routes/web.php
@@ -511,7 +566,8 @@ Las pruebas cubren:
 - validación de tipos, claves y referencias;
 - guardado, conflictos de hash y `force`;
 - endpoints del visor, contexto, Mermaid, assets y JSON Schema;
-- comandos de instalación, validación y exportación.
+- comandos de instalación, validación y exportación;
+- importación desde migraciones (create, alter, rename, drop, FKs y pivotes).
 
 La suite se ejecutó contra Laravel 12 (Testbench 10, Pest 3) y Laravel 13
 (Testbench 11, Pest 4). El entorno local queda en Laravel 13; las constraints del

@@ -42,6 +42,9 @@ Route::group([
     Route::put('/data', [DiagramController::class, 'update'])
         ->name('data.update');
 
+    Route::post('/import', [DiagramController::class, 'import'])
+        ->name('import');
+
     Route::get('/context.md', [DiagramController::class, 'context'])
         ->name('context');
 

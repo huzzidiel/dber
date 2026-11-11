@@ -106,6 +106,31 @@ export class Store {
         this.emit('saved');
     }
 
+    applyImported(document) {
+        if (!document || typeof document !== 'object' || Array.isArray(document)) {
+            return;
+        }
+
+        this.pushHistory();
+        this.document = document;
+
+        if (!this.document.tables || typeof this.document.tables !== 'object' || Array.isArray(this.document.tables)) {
+            this.document.tables = {};
+        }
+
+        for (const table of Object.values(this.document.tables)) {
+            orderTableFields(table);
+        }
+
+        if (this.selected !== null && !this.table(this.selected)) {
+            this.selected = null;
+        }
+
+        this.dirty = true;
+        this.conflict = false;
+        this.emit('import');
+    }
+
     setSelected(name) {
         const next = name !== null && this.table(name) ? name : null;
 
