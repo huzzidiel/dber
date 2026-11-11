@@ -118,6 +118,28 @@ it('detects classic pivot tables', function (): void {
     expect($tables['role_user']['pivot'])->toBeTrue();
 });
 
+it('ignores the down method when parsing a migration class', function (): void {
+    $tables = migrationSchema(<<<'PHP'
+        return new class extends \Illuminate\Database\Migrations\Migration
+        {
+            public function up(): void
+            {
+                Schema::create('users', function (Blueprint $table) {
+                    $table->id();
+                    $table->string('name');
+                });
+            }
+
+            public function down(): void
+            {
+                Schema::dropIfExists('users');
+            }
+        };
+        PHP);
+
+    expect($tables)->toHaveKey('users');
+});
+
 it('handles morphs and remembered tokens', function (): void {
     $tables = migrationSchema(<<<'PHP'
         Schema::create('comments', function (Blueprint $table) {

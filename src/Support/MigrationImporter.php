@@ -27,6 +27,7 @@ final class MigrationImporter
     {
         $files = $this->migrationFiles($path);
         $operations = [];
+        $parseWarnings = [];
 
         foreach ($files as $file) {
             $contents = file_get_contents($file);
@@ -39,19 +40,28 @@ final class MigrationImporter
                 $operation['file'] = basename($file);
                 $operations[] = $operation;
             }
+
+            foreach ($this->parser->warnings() as $message) {
+                $parseWarnings[] = [
+                    'path' => 'migrations/'.basename($file),
+                    'message' => $message,
+                ];
+            }
         }
 
         $tables = $this->builder->build($operations, $this->parser);
         $document = $this->merger->merge($existing, $tables, $prune);
         $compiled = $this->compiler->compile($document);
 
-        $warnings = array_map(
+        $builderWarnings = array_map(
             static fn (array $warning): array => [
                 'path' => $warning['file'] !== null ? 'migrations/'.$warning['file'] : '$',
                 'message' => $warning['message'],
             ],
             $this->builder->warnings(),
         );
+
+        $warnings = array_merge($parseWarnings, $builderWarnings);
 
         return [
             'document' => $compiled->document,

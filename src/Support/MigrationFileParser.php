@@ -14,17 +14,122 @@ namespace Huzzidiel\Dber\Support;
 final class MigrationFileParser
 {
     /**
+     * @var list<string>
+     */
+    private array $warnings = [];
+
+    /**
+     * Nombres por defecto de las tablas de Spatie Permission.
+     *
+     * @var array<string, string>
+     */
+    private const TABLE_NAME_DEFAULTS = [
+        'roles' => 'roles',
+        'permissions' => 'permissions',
+        'model_has_roles' => 'model_has_roles',
+        'model_has_permissions' => 'model_has_permissions',
+        'role_has_permissions' => 'role_has_permissions',
+    ];
+
+    /**
+     * Nombres por defecto de las columnas de Spatie Permission.
+     *
+     * @var array<string, string>
+     */
+    private const COLUMN_NAME_DEFAULTS = [
+        'role_pivot_key' => 'role_id',
+        'permission_pivot_key' => 'permission_id',
+        'model_morph_key' => 'model_id',
+        'team_foreign_key' => 'team_id',
+    ];
+
+    /**
+     * Resuelve nombres dinámicos comunes de Spatie a sus valores por defecto.
+     */
+    public static function resolveName(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '$pivotPermission') {
+            return 'permission_id';
+        }
+
+        if ($value === '$pivotRole') {
+            return 'role_id';
+        }
+
+        if (preg_match('/^\$tableNames\s*\[\s*[\'"]([a-z_]+)[\'"]\s*\]$/', $value, $matches) === 1) {
+            return self::TABLE_NAME_DEFAULTS[$matches[1]] ?? $value;
+        }
+
+        if (preg_match('/^\$columnNames\s*\[\s*[\'"]([a-z_]+)[\'"]\s*\]$/', $value, $matches) === 1) {
+            return self::COLUMN_NAME_DEFAULTS[$matches[1]] ?? $value;
+        }
+
+        return $value;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function warnings(): array
+    {
+        return $this->warnings;
+    }
+
+    /**
      * @return list<array{op: string, table: string, new_table: string|null, body: string|null}>
      */
     public function parse(string $contents): array
     {
+        $this->warnings = [];
         $operations = [];
+        $source = $this->upBody($contents);
 
-        foreach ($this->schemaCalls($contents) as $call) {
-            $operations[] = $this->parseCall($call['op'], $call['statement']);
+        foreach ($this->schemaCalls($source) as $call) {
+            $operation = $this->parseCall($call['op'], $call['statement']);
+
+            if ($operation['table'] !== '' && ! $this->isIdentifier($operation['table'])) {
+                $this->warnings[] = 'Skipped dynamic table name: '.$operation['table'];
+                continue;
+            }
+
+            if ($operation['new_table'] !== null && $operation['new_table'] !== ''
+                && ! $this->isIdentifier($operation['new_table'])) {
+                $this->warnings[] = 'Skipped dynamic table rename target: '.$operation['new_table'];
+                continue;
+            }
+
+            $operations[] = $operation;
         }
 
         return $operations;
+    }
+
+    /**
+     * Elimina los bloques `if ($teams ...)` de las migraciones de Spatie, cuyo
+     * contenido solo aplica cuando la configuración de equipos está activa.
+     */
+    private function stripTeamsBranches(string $body): string
+    {
+        while (preg_match('/\bif\s*\([^)]*\$teams[^)]*\)/', $body, $matches, PREG_OFFSET_CAPTURE) === 1) {
+            $start = $matches[0][1];
+            $open = strpos($body, '{', $start);
+
+            if ($open === false) {
+                break;
+            }
+
+            $close = $this->braceEnd($body, $open);
+
+            if ($close === null) {
+                break;
+            }
+
+            $body = substr($body, 0, $start).substr($body, $close + 1);
+        }
+
+        return $body;
     }
 
     /**
@@ -36,6 +141,7 @@ final class MigrationFileParser
     {
         $statements = [];
         $result = [];
+        $body = $this->stripTeamsBranches($body);
 
         foreach ($this->splitStatements($body) as $statement) {
             $calls = $this->methodCalls($statement);
@@ -87,7 +193,7 @@ final class MigrationFileParser
         if ($op === 'create' || $op === 'table') {
             return [
                 'op' => $op,
-                'table' => $this->stringValue($args[0] ?? ''),
+                'table' => self::resolveName($this->stringValue($args[0] ?? '')),
                 'new_table' => null,
                 'body' => $this->closureBody($statement),
             ];
@@ -96,7 +202,7 @@ final class MigrationFileParser
         if ($op === 'drop' || $op === 'dropIfExists') {
             return [
                 'op' => 'drop',
-                'table' => $this->stringValue($args[0] ?? ''),
+                'table' => self::resolveName($this->stringValue($args[0] ?? '')),
                 'new_table' => null,
                 'body' => null,
             ];
@@ -104,8 +210,8 @@ final class MigrationFileParser
 
         return [
             'op' => 'rename',
-            'table' => $this->stringValue($args[0] ?? ''),
-            'new_table' => $this->stringValue($args[1] ?? ''),
+            'table' => self::resolveName($this->stringValue($args[0] ?? '')),
+            'new_table' => self::resolveName($this->stringValue($args[1] ?? '')),
             'body' => null,
         ];
     }
@@ -146,24 +252,123 @@ final class MigrationFileParser
             return null;
         }
 
-        $depth = 0;
+        $close = $this->braceEnd($statement, $open);
 
-        for ($index = $open; $index < strlen($statement); $index += 1) {
-            if ($statement[$index] === '{') {
+        if ($close === null) {
+            return null;
+        }
+
+        return substr($statement, $open + 1, $close - $open - 1);
+    }
+
+    /**
+     * Devuelve solo el cuerpo del método up(), para ignorar down().
+     */
+    private function upBody(string $source): string
+    {
+        if (preg_match('/\bfunction\s+up\s*\([^)]*\)\s*(?::\s*\w+)?\s*\{/', $source, $matches, PREG_OFFSET_CAPTURE) === 1) {
+            $open = strpos($source, '{', $matches[0][1]);
+
+            if ($open !== false) {
+                $close = $this->braceEnd($source, $open);
+
+                if ($close !== null) {
+                    return substr($source, $open + 1, $close - $open - 1);
+                }
+            }
+        }
+
+        return $source;
+    }
+
+    private function braceEnd(string $text, int $open): ?int
+    {
+        $depth = 0;
+        $inSingle = false;
+        $inDouble = false;
+        $inLine = false;
+        $inBlock = false;
+        $length = strlen($text);
+
+        for ($index = $open; $index < $length; $index += 1) {
+            $char = $text[$index];
+            $next = $index + 1 < $length ? $text[$index + 1] : '';
+
+            if ($inBlock) {
+                if ($char === '*' && $next === '/') {
+                    $inBlock = false;
+                    $index += 1;
+                }
+                continue;
+            }
+
+            if ($inLine) {
+                if ($char === "\n") {
+                    $inLine = false;
+                }
+                continue;
+            }
+
+            if ($char === '/' && $next === '*') {
+                $inBlock = true;
+                $index += 1;
+                continue;
+            }
+
+            if ($char === '/' && $next === '/') {
+                $inLine = true;
+                $index += 1;
+                continue;
+            }
+
+            if ($inSingle) {
+                if ($char === '\\') {
+                    $index += 1;
+                } elseif ($char === "'") {
+                    $inSingle = false;
+                }
+                continue;
+            }
+
+            if ($inDouble) {
+                if ($char === '\\') {
+                    $index += 1;
+                } elseif ($char === '"') {
+                    $inDouble = false;
+                }
+                continue;
+            }
+
+            if ($char === "'") {
+                $inSingle = true;
+                continue;
+            }
+
+            if ($char === '"') {
+                $inDouble = true;
+                continue;
+            }
+
+            if ($char === '{') {
                 $depth += 1;
                 continue;
             }
 
-            if ($statement[$index] === '}') {
+            if ($char === '}') {
                 $depth -= 1;
 
                 if ($depth === 0) {
-                    return substr($statement, $open + 1, $index - $open - 1);
+                    return $index;
                 }
             }
         }
 
         return null;
+    }
+
+    private function isIdentifier(string $value): bool
+    {
+        return preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $value) === 1;
     }
 
     /**

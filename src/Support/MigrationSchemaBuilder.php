@@ -184,10 +184,10 @@ final class MigrationSchemaBuilder
             'precision' => $this->modifyCurrent($table, 'precision', (int) ($args[0] ?? 0)),
             'scale' => $this->modifyCurrent($table, 'scale', (int) ($args[0] ?? 0)),
             'autoIncrement' => $this->modifyCurrent($table, 'auto_increment', true),
-            'unique' => $this->addIndex($table, $this->columnsArg($args), true),
-            'index' => $this->addIndex($table, $this->columnsArg($args), false),
-            'primary' => $this->setPrimary($table, $this->columnsArg($args)),
-            'foreign' => $this->beginForeign($table, $this->columnsArg($args)),
+            'unique' => $this->addIndex($table, $this->singleColumnList($args), true),
+            'index' => $this->addIndex($table, $this->singleColumnList($args), false),
+            'primary' => $this->setPrimary($table, $this->singleColumnList($args)),
+            'foreign' => $this->beginForeign($table, $this->variadicColumnList($args)),
             'references' => $this->pendingForeignColumn($args[0] ?? 'id'),
             'on' => $this->applyForeign($args[0] ?? ''),
             'constrained' => $this->applyConstrained($table, $args),
@@ -201,7 +201,7 @@ final class MigrationSchemaBuilder
             'onDelete' => $this->referenceAction('on_delete', $args[0] ?? ''),
             'onUpdate' => $this->referenceAction('on_update', $args[0] ?? ''),
             'renameColumn' => $this->renameColumn($table, $args[0] ?? '', $args[1] ?? ''),
-            'dropColumn' => $this->dropColumn($table, $this->columnsArg($args)),
+            'dropColumn' => $this->dropColumn($table, $this->variadicColumnList($args)),
             'dropForeign' => $this->warn($file, 'Skipped dropForeign (unmapped index name).'),
 
             // Ignorados.
@@ -274,8 +274,15 @@ final class MigrationSchemaBuilder
      */
     private function addColumn(string $table, ?string $name, array $data): void
     {
-        if ($name === null || $name === '') {
+        if ($name === null) {
             $this->warn(null, 'Skipped a column without a name.');
+            return;
+        }
+
+        $name = MigrationFileParser::resolveName($name);
+
+        if ($name === '' || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $name) !== 1) {
+            $this->warn(null, 'Skipped dynamic column name: '.$name);
             return;
         }
 
@@ -361,12 +368,16 @@ final class MigrationSchemaBuilder
 
         $this->ensureTable($table);
 
+        foreach ($columns as $column) {
+            if (! isset($this->tables[$table]['fields'][$column])) {
+                $this->warn(null, 'Skipped index referencing an unknown column: '.$column);
+                return;
+            }
+        }
+
         if ($unique && count($columns) === 1) {
             $field = $columns[0];
-
-            if (isset($this->tables[$table]['fields'][$field])) {
-                $this->tables[$table]['fields'][$field]['unique'] = true;
-            }
+            $this->tables[$table]['fields'][$field]['unique'] = true;
         }
 
         $this->tables[$table]['indexes'][] = [
@@ -381,6 +392,14 @@ final class MigrationSchemaBuilder
     private function setPrimary(string $table, array $columns): void
     {
         $this->ensureTable($table);
+
+        foreach ($columns as $column) {
+            if (! isset($this->tables[$table]['fields'][$column])) {
+                $this->warn(null, 'Skipped primary key referencing an unknown column: '.$column);
+                return;
+            }
+        }
+
         $this->tables[$table]['primary_key'] = $columns;
     }
 
@@ -425,7 +444,7 @@ final class MigrationSchemaBuilder
         $this->applyForeignKey(
             $this->pendingForeign['table'],
             $field,
-            (string) $table,
+            MigrationFileParser::resolveName((string) $table),
             $this->pendingForeign['column'],
         );
 
@@ -443,7 +462,9 @@ final class MigrationSchemaBuilder
         }
 
         $field = $this->current['field'];
-        $targetTable = isset($args[0]) && is_string($args[0]) ? $args[0] : $this->guessTable($field);
+        $targetTable = isset($args[0]) && is_string($args[0])
+            ? MigrationFileParser::resolveName($args[0])
+            : $this->guessTable($field);
         $targetColumn = isset($args[1]) ? (string) $args[1] : 'id';
 
         $this->applyForeignKey($table, $field, $targetTable, $targetColumn);
@@ -533,7 +554,7 @@ final class MigrationSchemaBuilder
     /**
      * @return list<string>
      */
-    private function columnsArg(array $args): array
+    private function singleColumnList(array $args): array
     {
         if ($args === []) {
             if ($this->current !== null) {
@@ -546,10 +567,45 @@ final class MigrationSchemaBuilder
         $first = $args[0];
 
         if (is_array($first)) {
-            return array_values(array_map(static fn (mixed $value): string => (string) $value, $first));
+            $columns = array_map(static fn (mixed $value): string => (string) $value, $first);
+        } else {
+            $columns = [(string) $first];
         }
 
-        return array_values(array_map(static fn (mixed $value): string => (string) $value, $args));
+        return $this->resolveColumns($columns);
+    }
+
+    private function variadicColumnList(array $args): array
+    {
+        if ($args === []) {
+            if ($this->current !== null) {
+                return [$this->current['field']];
+            }
+
+            return [];
+        }
+
+        $first = $args[0];
+
+        if (is_array($first)) {
+            $columns = array_map(static fn (mixed $value): string => (string) $value, $first);
+        } else {
+            $columns = array_map(static fn (mixed $value): string => (string) $value, $args);
+        }
+
+        return $this->resolveColumns($columns);
+    }
+
+    /**
+     * @param list<string> $columns
+     * @return list<string>
+     */
+    private function resolveColumns(array $columns): array
+    {
+        return array_values(array_map(
+            static fn (string $column): string => MigrationFileParser::resolveName($column),
+            $columns,
+        ));
     }
 
     private function ensureTable(string $table): void
