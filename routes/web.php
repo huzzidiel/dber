@@ -45,6 +45,9 @@ Route::group([
     Route::post('/import', [DiagramController::class, 'import'])
         ->name('import');
 
+    Route::post('/generate', [DiagramController::class, 'generate'])
+        ->name('generate');
+
     Route::get('/context.md', [DiagramController::class, 'context'])
         ->name('context');
 

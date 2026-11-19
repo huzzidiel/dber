@@ -9,6 +9,7 @@ use Huzzidiel\Dber\Data\CompiledDiagram;
 use Huzzidiel\Dber\Data\Issue;
 use Huzzidiel\Dber\Exceptions\DiagramConflictException;
 use Huzzidiel\Dber\Exceptions\InvalidDiagramException;
+use Huzzidiel\Dber\Support\CodeGenerator;
 use Huzzidiel\Dber\Support\DiagramRepository;
 use Huzzidiel\Dber\Support\MarkdownExporter;
 use Huzzidiel\Dber\Support\MermaidExporter;
@@ -30,6 +31,7 @@ final class DiagramController
         private readonly MarkdownExporter $markdownExporter,
         private readonly MermaidExporter $mermaidExporter,
         private readonly MigrationImporter $migrationImporter,
+        private readonly CodeGenerator $codeGenerator,
     ) {
     }
 
@@ -39,6 +41,7 @@ final class DiagramController
             'dataUrl' => route('dber.data'),
             'saveUrl' => route('dber.data.update'),
             'importUrl' => route('dber.import'),
+            'generateUrl' => route('dber.generate'),
             'contextUrl' => route('dber.context'),
             'mermaidUrl' => route('dber.mermaid'),
             'jsUrl' => route('dber.asset', ['path' => 'js/dber.js']),
@@ -146,6 +149,72 @@ final class DiagramController
             'summary' => $result['summary'],
             'issues' => $result['issues'],
             'warnings' => $result['warnings'],
+        ]);
+    }
+
+    public function generate(Request $request): JsonResponse
+    {
+        if (! (bool) config('dber.editor')) {
+            return $this->error('The diagram editor is disabled.', [], 403);
+        }
+
+        if (! $this->repository->exists()) {
+            return $this->error('The schema file does not exist yet.', [], 404);
+        }
+
+        $compiled = $this->repository->load();
+
+        if ($compiled->hasErrors()) {
+            return $this->error(
+                'Fix the schema errors before generating code.',
+                array_map(
+                    static fn (Issue $issue): array => $issue->toArray(),
+                    $compiled->errors(),
+                ),
+                422,
+            );
+        }
+
+        $plan = $this->codeGenerator->plan(
+            $compiled,
+            (string) config('dber.migrations_path', database_path('migrations')),
+            app_path('Models'),
+        );
+
+        if ($request->boolean('write')) {
+            $this->codeGenerator->write($plan);
+
+            return $this->success('Code generated.', [
+                'summary' => $plan['summary'],
+                'warnings' => $plan['warnings'],
+                'files' => array_map(
+                    static fn (array $file): string => $file['path'],
+                    array_merge($plan['migrations'], $plan['models']),
+                ),
+            ]);
+        }
+
+        return $this->success('Code generation plan.', [
+            'summary' => $plan['summary'],
+            'warnings' => $plan['warnings'],
+            'migrations' => array_map(
+                static fn (array $file): array => [
+                    'path' => $file['path'],
+                    'action' => $file['action'],
+                    'table' => $file['table'],
+                    'contents' => $file['contents'],
+                ],
+                $plan['migrations'],
+            ),
+            'models' => array_map(
+                static fn (array $file): array => [
+                    'path' => $file['path'],
+                    'action' => $file['action'],
+                    'class' => $file['class'],
+                    'contents' => $file['contents'],
+                ],
+                $plan['models'],
+            ),
         ]);
     }
 

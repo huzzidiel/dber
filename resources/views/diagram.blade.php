@@ -31,6 +31,7 @@
     data-data-url="{{ $dataUrl }}"
     data-save-url="{{ $saveUrl }}"
     data-import-url="{{ $importUrl }}"
+    data-generate-url="{{ $generateUrl }}"
     data-context-url="{{ $contextUrl }}"
     data-mermaid-url="{{ $mermaidUrl }}"
     data-editable="{{ $editable ? '1' : '0' }}"
@@ -155,6 +156,13 @@
                 class="dber-btn"
                 title="Build the diagram from the existing migrations"
             >Import migrations</button>
+
+            <button
+                id="dber-generate"
+                type="button"
+                class="dber-btn"
+                title="Generate migrations and models from the diagram"
+            >Generate code</button>
 
             <div class="dber-menu">
                 <button

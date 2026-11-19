@@ -33,6 +33,9 @@ segunda lista de relaciones que se pueda desincronizar.
 - **Validación** con `php artisan dber:validate` y desde el endpoint de guardado.
 - **Importar desde migraciones** con el botón “Import migrations” o
   `php artisan dber:import`, incluyendo alteraciones posteriores de tablas.
+- **Generar migraciones y modelos** desde el diagrama con “Generate code” o
+  `php artisan dber:generate`: crea las migraciones faltantes y actualiza los
+  modelos Eloquent sin sobrescribir tu lógica.
 - **Exportación** a Markdown para IA, Mermaid y JSON canónico.
 - **Cero dependencias de frontend**: SVG, CSS y JavaScript propios, sin npm, sin
   CDN y sin build step.
@@ -375,6 +378,48 @@ advertencias.
   informan como advertencias.
 - No ejecuta SQL; interpreta el DSL estándar de Laravel.
 
+## Generar migraciones y modelos
+
+A partir del diagrama, Dber puede escribir el código Laravel correspondiente.
+
+### Botón
+
+En la barra superior, pulsa **Generate code**. Se muestra un resumen de lo que se
+escribirá y, al confirmar, se crean o actualizan los archivos.
+
+### Comando
+
+```bash
+php artisan dber:generate
+php artisan dber:generate --dry-run
+php artisan dber:generate --only-migrations
+php artisan dber:generate --only-models
+```
+
+### Cómo funciona
+
+- **Migraciones**:
+  - Si la tabla no tiene migración, crea `create_<tabla>_table`.
+  - Si la tabla ya existe en las migraciones pero el diagrama tiene campos
+    nuevos, crea una migración adicional `add_<campos>_to_<tabla>_table`.
+  - Nunca sobrescribe migraciones existentes.
+- **Modelos**:
+  - Si el modelo no existe, lo crea en `app/Models`.
+  - Si ya existe, se fusiona: actualiza `$fillable` y `$casts`, y agrega
+    `SoftDeletes`, `$table`, `$primaryKey` o `$timestamps` solo cuando faltan.
+    Tu lógica personalizada se conserva.
+- Las tablas pivote no generan modelo.
+
+### Notas
+
+- El generador usa los tipos canónicos del esquema y los traduce a los métodos
+  de `Blueprint` (`bigIncrements`, `string`, `enum`, `decimal`, `foreignId`,
+  `timestamps`, `softDeletes`, etc.).
+- Los `created_at`, `updated_at` y `deleted_at` se generan como `timestamps()` y
+  `softDeletes()`.
+- El endpoint `POST /dber/generate` admite `{ "write": true }` para escribir, o
+  `{ "write": false }` para obtener solo el plan.
+
 ## Uso con agentes de IA
 
 El paquete está diseñado para que un agente entienda el esquema sin documentación
@@ -433,6 +478,7 @@ Todas las rutas usan el prefijo configurado (`dber` por defecto).
 | `GET` | `/dber/data` | Documento normalizado, relaciones, issues, hash y estadísticas. |
 | `PUT` | `/dber/data` | Guarda `{ document, hash, force? }`. |
 | `POST` | `/dber/import` | Genera el documento desde las migraciones. |
+| `POST` | `/dber/generate` | Genera migraciones y modelos desde el diagrama. |
 | `GET` | `/dber/context.md` | Contexto Markdown para IA. |
 | `GET` | `/dber/diagram.mmd` | Diagrama Mermaid. |
 | `GET` | `/dber/schema.json` | JSON Schema publicado o el del paquete. |
@@ -478,6 +524,8 @@ php artisan dber:export json
 php artisan dber:export context --path=diagram-er/CONTEXT.md
 php artisan dber:import
 php artisan dber:import --dry-run
+php artisan dber:generate
+php artisan dber:generate --dry-run
 ```
 
 `dber:validate` devuelve código de salida distinto de cero si hay errores. Las
@@ -567,7 +615,8 @@ Las pruebas cubren:
 - guardado, conflictos de hash y `force`;
 - endpoints del visor, contexto, Mermaid, assets y JSON Schema;
 - comandos de instalación, validación y exportación;
-- importación desde migraciones (create, alter, rename, drop, FKs y pivotes).
+- importación desde migraciones (create, alter, rename, drop, FKs y pivotes);
+- generación de migraciones y modelos desde el diagrama.
 
 La suite se ejecutó contra Laravel 12 (Testbench 10, Pest 3) y Laravel 13
 (Testbench 11, Pest 4). El entorno local queda en Laravel 13; las constraints del

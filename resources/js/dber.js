@@ -46,6 +46,7 @@ class DberApp {
             undo: qs('#dber-undo'),
             redo: qs('#dber-redo'),
             import: qs('#dber-import'),
+            generate: qs('#dber-generate'),
             live: qs('#dber-live'),
             liveLabel: qs('#dber-live-label'),
             theme: qs('#dber-theme'),
@@ -211,6 +212,7 @@ class DberApp {
         });
 
         this.elements.import.addEventListener('click', () => this.openImportModal());
+        this.elements.generate.addEventListener('click', () => this.openGenerateModal());
 
         this.elements.addTable.addEventListener('click', () => this.addTable());
 
@@ -665,6 +667,98 @@ class DberApp {
         return `Imported ${parts.join(', ')}.`;
     }
 
+    openGenerateModal() {
+        if (!this.store.editable) {
+            return;
+        }
+
+        const summary = el('p', {
+            className: 'dber-note',
+            text: 'Analyzing the schema…',
+        });
+
+        const error = el('p', {
+            className: 'dber-note',
+            style: 'display:none; color:var(--dber-red); border-color:rgba(225,29,72,.3);',
+        });
+
+        const body = el('div', {}, [
+            el('p', {
+                text: 'Create or update migrations and Eloquent models from the current diagram. Existing migrations only get the missing fields; existing models are merged.',
+            }),
+            summary,
+            error,
+        ]);
+
+        let close = () => {};
+        let wrote = false;
+
+        const run = el('button', {
+            type: 'button',
+            className: 'dber-btn dber-btn-primary',
+            text: 'Generate',
+            disabled: true,
+        });
+
+        run.addEventListener('click', async () => {
+            if (wrote) {
+                return;
+            }
+
+            run.disabled = true;
+            error.style.display = 'none';
+
+            try {
+                const data = await this.api.generateCode({ write: true });
+                wrote = true;
+                close();
+
+                const s = data.summary ?? {};
+                const files = Array.isArray(data.files) ? data.files.length : 0;
+
+                this.notify(`Generated ${files} file(s): ${s.migrations ?? 0} migration(s), ${s.models ?? 0} model(s).`, 'success');
+            } catch (exception) {
+                run.disabled = false;
+                error.style.display = 'block';
+                error.textContent = exception?.message ?? 'Code generation failed.';
+            }
+        });
+
+        const modal = this.inspector.showModal({
+            title: 'Generate code',
+            body,
+            footer: [
+                el('button', {
+                    type: 'button',
+                    className: 'dber-btn',
+                    text: 'Cancel',
+                    onclick: () => close(),
+                }),
+                run,
+            ],
+        });
+
+        close = modal.close;
+
+        // Preview the plan to describe what will be written.
+        this.api.generateCode({ write: false })
+            .then((data) => {
+                const s = data.summary ?? {};
+                const files = (data.migrations ?? []).concat(data.models ?? []);
+
+                summary.textContent = `Will write ${files.length} file(s): `
+                    + `${s.migrations ?? 0} migration(s) (${s.migrations_created ?? 0} create, ${s.migrations_altered ?? 0} alter), `
+                    + `${s.models ?? 0} model(s) (${s.models_created ?? 0} create, ${s.models_updated ?? 0} update).`;
+
+                run.disabled = false;
+            })
+            .catch((exception) => {
+                summary.textContent = '';
+                error.style.display = 'block';
+                error.textContent = exception?.message ?? 'Could not prepare the generation plan.';
+            });
+    }
+
     applyTheme(theme, persist = true) {
         this.theme = theme === 'light' ? 'light' : 'dark';
         document.documentElement.dataset.theme = this.theme;
@@ -844,6 +938,7 @@ class DberApp {
         this.elements.redo.disabled = !this.store.editable || this.store.future.length === 0;
         this.elements.addTable.disabled = !this.store.editable;
         this.elements.import.disabled = !this.store.editable;
+        this.elements.generate.disabled = !this.store.editable;
         this.elements.showPivots.checked = this.store.showPivots;
         this.elements.emptyPath.textContent = this.store.path || this.schemaPath;
 
