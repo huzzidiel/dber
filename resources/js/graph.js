@@ -240,83 +240,90 @@ export class Graph {
             }
         }
 
-        const columns = new Map();
+        const ranks = new Map();
 
         for (const table of visible) {
-            const column = depth.get(table.key) ?? 0;
+            const rank = depth.get(table.key) ?? 0;
 
-            if (!columns.has(column)) {
-                columns.set(column, []);
+            if (!ranks.has(rank)) {
+                ranks.set(rank, []);
             }
 
-            columns.get(column).push(table);
+            ranks.get(rank).push(table);
         }
 
-        const ordered = [...columns.keys()].sort((first, second) => first - second);
+        const ordered = [...ranks.keys()].sort((first, second) => first - second);
 
-        for (const column of ordered) {
-            columns.get(column).sort((first, second) => first.key.localeCompare(second.key));
+        for (const rank of ordered) {
+            ranks.get(rank).sort((first, second) => first.key.localeCompare(second.key));
         }
 
-        const columnWidths = new Map();
+        const rankExtents = new Map();
 
-        for (const column of ordered) {
-            columnWidths.set(
-                column,
-                Math.max(...columns.get(column).map((table) => this.sizes.get(table.key).width)),
+        for (const rank of ordered) {
+            const extents = ranks.get(rank).map(
+                (table) => (orientation === 'vertical'
+                    ? this.sizes.get(table.key).height
+                    : this.sizes.get(table.key).width),
             );
+
+            rankExtents.set(rank, Math.max(...extents));
         }
 
-        let positions = new Map();
-        const yPositions = new Map();
+        const rankPositions = new Map();
+        const assignRank = (tables) => {
+            if (orientation === 'vertical') {
+                assignRowX(tables, this.sizes, rankPositions);
+            } else {
+                assignColumnY(tables, this.sizes, rankPositions);
+            }
+        };
 
-        for (const column of ordered) {
-            assignColumnY(columns.get(column), this.sizes, yPositions);
+        for (const rank of ordered) {
+            assignRank(ranks.get(rank));
         }
 
         for (let pass = 0; pass < 4; pass += 1) {
             const leftToRight = pass % 2 === 0;
 
             if (leftToRight) {
-                for (const column of ordered) {
-                    sortByNeighbors(columns.get(column), parents, yPositions, true);
-                    assignColumnY(columns.get(column), this.sizes, yPositions);
+                for (const rank of ordered) {
+                    sortByNeighbors(ranks.get(rank), parents, rankPositions, true);
+                    assignRank(ranks.get(rank));
                 }
             } else {
-                for (const column of [...ordered].reverse()) {
-                    sortByNeighbors(columns.get(column), children, yPositions, false);
-                    assignColumnY(columns.get(column), this.sizes, yPositions);
+                for (const rank of [...ordered].reverse()) {
+                    sortByNeighbors(ranks.get(rank), children, rankPositions, false);
+                    assignRank(ranks.get(rank));
                 }
             }
         }
 
-        let x = 0;
+        const positions = new Map();
+        let offset = 0;
 
-        for (const column of ordered) {
-            const columnWidth = columnWidths.get(column);
+        for (const rank of ordered) {
+            const extent = rankExtents.get(rank);
+            const gap = orientation === 'vertical' ? ROW_GAP : COLUMN_GAP;
 
-            for (const table of columns.get(column)) {
+            for (const table of ranks.get(rank)) {
                 const size = this.sizes.get(table.key);
-                positions.set(table.key, {
-                    x: snap(x + (columnWidth - size.width) / 2),
-                    y: snap(yPositions.get(table.key) ?? 0),
-                });
+                const along = rankPositions.get(table.key) ?? 0;
+
+                if (orientation === 'vertical') {
+                    positions.set(table.key, {
+                        x: snap(along),
+                        y: snap(offset + (extent - size.height) / 2),
+                    });
+                } else {
+                    positions.set(table.key, {
+                        x: snap(offset + (extent - size.width) / 2),
+                        y: snap(along),
+                    });
+                }
             }
 
-            x += columnWidth + COLUMN_GAP;
-        }
-
-        if (orientation === 'vertical') {
-            const rotated = new Map();
-
-            for (const [key, position] of positions) {
-                rotated.set(key, {
-                    x: snap(-position.y),
-                    y: snap(position.x),
-                });
-            }
-
-            positions = rotated;
+            offset += extent + gap;
         }
 
         for (const [key, position] of positions) {
@@ -1206,6 +1213,17 @@ function assignColumnY(tables, sizes, yPositions) {
     for (const table of tables) {
         yPositions.set(table.key, cursor);
         cursor += sizes.get(table.key).height + ROW_GAP;
+    }
+}
+
+function assignRowX(tables, sizes, xPositions) {
+    const totalWidth = tables.reduce((total, table) => total + sizes.get(table.key).width, 0)
+        + Math.max(0, tables.length - 1) * MIN_TABLE_GAP;
+    let cursor = -totalWidth / 2;
+
+    for (const table of tables) {
+        xPositions.set(table.key, cursor);
+        cursor += sizes.get(table.key).width + MIN_TABLE_GAP;
     }
 }
 
