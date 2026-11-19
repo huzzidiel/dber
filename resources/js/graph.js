@@ -38,8 +38,8 @@ export class Graph {
         this.pivotSet = new Set();
         this.sizes = new Map();
         this.positions = new Map();
-        this.waypoints = new Map();
         this.selected = null;
+        this.selectedEdge = null;
         this.filter = '';
         this.showPivots = false;
 
@@ -48,12 +48,10 @@ export class Graph {
         this.translateY = 0;
 
         this.drag = null;
-        this.waypointDrag = null;
         this.pan = null;
         this.initialized = false;
 
         this.loadPositions();
-        this.loadWaypoints();
         this.bindEvents();
     }
 
@@ -98,6 +96,7 @@ export class Graph {
 
     setSelected(name) {
         this.selected = name;
+        this.selectedEdge = null;
 
         for (const [key, element] of this.nodeEls) {
             element.classList.toggle('is-selected', key === name);
@@ -152,7 +151,7 @@ export class Graph {
         }
     }
 
-    autoLayout(persist = true) {
+    autoLayout(persist = true, orientation = 'horizontal') {
         const visible = this.visibleTables();
 
         if (visible.length === 0) {
@@ -268,7 +267,7 @@ export class Graph {
             );
         }
 
-        const positions = new Map();
+        let positions = new Map();
         const yPositions = new Map();
 
         for (const column of ordered) {
@@ -305,6 +304,19 @@ export class Graph {
             }
 
             x += columnWidth + COLUMN_GAP;
+        }
+
+        if (orientation === 'vertical') {
+            const rotated = new Map();
+
+            for (const [key, position] of positions) {
+                rotated.set(key, {
+                    x: snap(-position.y),
+                    y: snap(position.x),
+                });
+            }
+
+            positions = rotated;
         }
 
         for (const [key, position] of positions) {
@@ -636,40 +648,9 @@ export class Graph {
         group.appendChild(marker);
         group.appendChild(labelGroup);
 
-        const waypointEls = [];
-        const waypoints = this.waypoints.get(relation.id) ?? [];
-
-        for (let index = 0; index < waypoints.length; index += 1) {
-            const circle = svg('circle', {
-                class: 'dber-edge-waypoint',
-                r: 5,
-                fill: color,
-                stroke: '#ffffff',
-                'stroke-width': 1.5,
-            });
-
-            circle.addEventListener('pointerdown', (event) => this.beginWaypointDrag(event, relation.id, index));
-            circle.addEventListener('dblclick', (event) => {
-                event.stopPropagation();
-                this.removeWaypoint(relation.id, index);
-            });
-
-            group.appendChild(circle);
-            waypointEls.push(circle);
-        }
-
         hit.addEventListener('click', (event) => {
             event.stopPropagation();
-            this.addWaypoint(relation.id, event);
-        });
-
-        group.addEventListener('click', (event) => {
-            if (event.target.closest('.dber-edge-waypoint') || event.target.closest('.dber-edge-label-group')) {
-                return;
-            }
-
-            event.stopPropagation();
-            this.addWaypoint(relation.id, event);
+            this.selectEdge(relation.id);
         });
 
         group.addEventListener('mouseenter', () => {
@@ -677,7 +658,7 @@ export class Graph {
         });
 
         group.addEventListener('mouseleave', () => {
-            if (!this.isEdgeSelected(relation)) {
+            if (!this.isEdgeSelected(relation) && this.selectedEdge !== relation.id) {
                 group.classList.remove('is-active');
             }
         });
@@ -692,7 +673,6 @@ export class Graph {
             labelGroup,
             labelBg,
             label,
-            waypointEls,
         });
     }
 
@@ -755,9 +735,7 @@ export class Graph {
             }
 
             const { fromAnchor, toAnchor, exit } = sideAnchors(fromRect, toRect);
-            const waypoints = this.waypoints.get(edge.relation.id) ?? [];
-            const points = [fromAnchor, ...waypoints, toAnchor];
-            const route = orthogonalPath(points, exit);
+            const route = orthogonalPath([fromAnchor, toAnchor], exit);
 
             edge.line.setAttribute('d', route.d);
             edge.hit.setAttribute('d', route.d);
@@ -765,15 +743,6 @@ export class Graph {
                 'd',
                 this.markerPath(edge.relation, fromAnchor, route.firstDir, toAnchor, route.lastDir),
             );
-
-            edge.waypointEls.forEach((circle, index) => {
-                const point = waypoints[index];
-
-                if (point) {
-                    circle.setAttribute('cx', point.x);
-                    circle.setAttribute('cy', point.y);
-                }
-            });
 
             const midpoint = route.midpoints[Math.floor(route.midpoints.length / 2)]
                 ?? { x: (fromAnchor.x + toAnchor.x) / 2, y: (fromAnchor.y + toAnchor.y) / 2 };
@@ -820,66 +789,21 @@ export class Graph {
         return paths.join(' ');
     }
 
-    addWaypoint(relationId, event) {
-        const point = this.worldFromClient(event.clientX, event.clientY);
-        const list = this.waypoints.get(relationId) ?? [];
-
-        list.push({
-            x: snap(point.x),
-            y: snap(point.y),
-        });
-        this.waypoints.set(relationId, list);
-        this.persistWaypoints();
-        this.render();
-    }
-
-    removeWaypoint(relationId, index) {
-        const list = this.waypoints.get(relationId);
-
-        if (!list || !list[index]) {
+    selectEdge(relationId) {
+        if (this.selectedEdge === relationId) {
+            this.selectedEdge = null;
+            this.applyEdgeSelection();
             return;
         }
 
-        list.splice(index, 1);
+        this.selected = null;
+        this.selectedEdge = relationId;
 
-        if (list.length === 0) {
-            this.waypoints.delete(relationId);
+        for (const [, element] of this.nodeEls) {
+            element.classList.toggle('is-selected', false);
         }
 
-        this.persistWaypoints();
-        this.render();
-    }
-
-    beginWaypointDrag(event, relationId, index) {
-        if (event.button !== 0 || this.pan !== null) {
-            return;
-        }
-
-        event.stopPropagation();
-
-        const list = this.waypoints.get(relationId);
-
-        if (!list || !list[index]) {
-            return;
-        }
-
-        this.waypointDrag = {
-            pointerId: event.pointerId,
-            relationId,
-            index,
-            moved: false,
-        };
-
-        this.svgElement.setPointerCapture(event.pointerId);
-    }
-
-    worldFromClient(clientX, clientY) {
-        const rect = this.svgElement.getBoundingClientRect();
-
-        return {
-            x: (clientX - rect.left - this.translateX) / this.scale,
-            y: (clientY - rect.top - this.translateY) / this.scale,
-        };
+        this.applyEdgeSelection();
     }
 
     applyFilter() {
@@ -906,7 +830,19 @@ export class Graph {
 
     applyEdgeSelection() {
         for (const edge of this.edgeEls) {
-            edge.group.classList.toggle('is-active', this.isEdgeSelected(edge.relation));
+            const selected = this.selectedEdge === edge.relation.id;
+            const active = !selected && this.isEdgeSelected(edge.relation);
+
+            edge.group.classList.toggle('is-active', active);
+            edge.group.classList.toggle('is-selected', selected);
+
+            if (selected) {
+                if (edge.group.parentNode !== this.nodeLayer) {
+                    this.nodeLayer.appendChild(edge.group);
+                }
+            } else if (edge.group.parentNode === this.nodeLayer) {
+                this.edgeLayer.appendChild(edge.group);
+            }
         }
     }
 
@@ -1003,23 +939,6 @@ export class Graph {
                 return;
             }
 
-            if (this.waypointDrag !== null && event.pointerId === this.waypointDrag.pointerId) {
-                const point = this.worldFromClient(event.clientX, event.clientY);
-                const snapped = {
-                    x: snap(point.x),
-                    y: snap(point.y),
-                };
-                const list = this.waypoints.get(this.waypointDrag.relationId);
-
-                if (list && list[this.waypointDrag.index]) {
-                    list[this.waypointDrag.index] = snapped;
-                    this.waypointDrag.moved = true;
-                    this.positionEdges();
-                }
-
-                return;
-            }
-
             if (this.pan !== null && event.pointerId === this.pan.pointerId) {
                 const dx = event.clientX - this.pan.startX;
                 const dy = event.clientY - this.pan.startY;
@@ -1062,15 +981,6 @@ export class Graph {
                 this.nodeEls.get(key)?.classList.remove('is-dragging');
                 this.drag = null;
                 this.svgElement.classList.remove('is-dragging');
-                this.svgElement.releasePointerCapture?.(event.pointerId);
-            }
-
-            if (this.waypointDrag !== null && event.pointerId === this.waypointDrag.pointerId) {
-                if (this.waypointDrag.moved) {
-                    this.persistWaypoints();
-                }
-
-                this.waypointDrag = null;
                 this.svgElement.releasePointerCapture?.(event.pointerId);
             }
 
@@ -1214,12 +1124,10 @@ export class Graph {
         this.applyTransform();
     }
 
-    resetLayout() {
+    resetLayout(orientation = 'horizontal') {
         this.positions.clear();
-        this.waypoints.clear();
         this.removePositions();
-        this.removeWaypoints();
-        this.autoLayout();
+        this.autoLayout(true, orientation);
         this.render();
         this.fit();
     }
@@ -1284,66 +1192,6 @@ export class Graph {
     removePositions() {
         try {
             window.localStorage.removeItem(this.storageKey);
-        } catch {
-            // Ignorar.
-        }
-    }
-
-    persistWaypoints() {
-        try {
-            const data = {};
-
-            for (const [key, list] of this.waypoints) {
-                data[key] = list;
-            }
-
-            window.localStorage.setItem(`${this.storageKey}:waypoints`, JSON.stringify(data));
-        } catch {
-            // Ignorar almacenamiento no disponible.
-        }
-    }
-
-    loadWaypoints() {
-        try {
-            const raw = window.localStorage.getItem(`${this.storageKey}:waypoints`);
-
-            if (!raw) {
-                return;
-            }
-
-            const data = JSON.parse(raw);
-
-            if (!data || typeof data !== 'object') {
-                return;
-            }
-
-            for (const [key, list] of Object.entries(data)) {
-                if (!Array.isArray(list)) {
-                    continue;
-                }
-
-                const points = list.filter(
-                    (point) => point
-                        && typeof point === 'object'
-                        && Number.isFinite(point.x)
-                        && Number.isFinite(point.y),
-                ).map((point) => ({
-                    x: snap(Number(point.x)),
-                    y: snap(Number(point.y)),
-                }));
-
-                if (points.length > 0) {
-                    this.waypoints.set(key, points);
-                }
-            }
-        } catch {
-            this.waypoints.clear();
-        }
-    }
-
-    removeWaypoints() {
-        try {
-            window.localStorage.removeItem(`${this.storageKey}:waypoints`);
         } catch {
             // Ignorar.
         }

@@ -56,6 +56,7 @@ class DberApp {
             tableList: qs('#dber-table-list'),
             showPivots: qs('#dber-show-pivots'),
             autoLayout: qs('#dber-auto-layout'),
+            autoLayoutVertical: qs('#dber-auto-layout-vertical'),
             fit: qs('#dber-fit'),
             zoomIn: qs('#dber-zoom-in'),
             zoomOut: qs('#dber-zoom-out'),
@@ -233,8 +234,13 @@ class DberApp {
         });
 
         this.elements.autoLayout.addEventListener('click', () => {
-            this.graph.resetLayout();
+            this.graph.resetLayout('horizontal');
             this.notify('Layout arranged.', 'info');
+        });
+
+        this.elements.autoLayoutVertical.addEventListener('click', () => {
+            this.graph.resetLayout('vertical');
+            this.notify('Layout arranged vertically.', 'info');
         });
 
         this.elements.fit.addEventListener('click', () => this.graph.fit());

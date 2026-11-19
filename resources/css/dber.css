@@ -622,6 +622,7 @@ a {
 
 .dber-sidebar-actions {
     display: flex;
+    flex-direction: column;
     gap: 6px;
 }
 
@@ -847,14 +848,14 @@ a {
     fill: none;
     stroke: transparent;
     stroke-width: 16;
-    cursor: crosshair;
+    cursor: pointer;
 }
 
-.dber-edge-waypoint {
-    cursor: move;
+.dber-edge.is-selected .dber-edge-line {
+    stroke-width: 4;
 }
 
-.dber-edge-waypoint:hover {
+.dber-edge.is-selected .dber-edge-marker {
     stroke-width: 2.5;
 }
 

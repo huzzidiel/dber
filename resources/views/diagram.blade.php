@@ -251,7 +251,14 @@
                         id="dber-auto-layout"
                         type="button"
                         class="dber-btn dber-btn-small"
+                        title="Arrange tables horizontally"
                     >Auto arrange</button>
+                    <button
+                        id="dber-auto-layout-vertical"
+                        type="button"
+                        class="dber-btn dber-btn-small"
+                        title="Arrange tables vertically"
+                    >Arrange vertical</button>
                     <button
                         id="dber-fit"
                         type="button"
