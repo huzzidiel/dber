@@ -49,6 +49,7 @@ export class Graph {
 
         this.drag = null;
         this.pan = null;
+        this.orientation = 'horizontal';
         this.initialized = false;
 
         this.loadPositions();
@@ -152,6 +153,7 @@ export class Graph {
     }
 
     autoLayout(persist = true, orientation = 'horizontal') {
+        this.orientation = orientation;
         const visible = this.visibleTables();
 
         if (visible.length === 0) {
@@ -313,7 +315,7 @@ export class Graph {
                 if (orientation === 'vertical') {
                     positions.set(table.key, {
                         x: snap(along),
-                        y: snap(offset + (extent - size.height) / 2),
+                        y: snap(offset),
                     });
                 } else {
                     positions.set(table.key, {
@@ -741,7 +743,7 @@ export class Graph {
                 continue;
             }
 
-            const { fromAnchor, toAnchor, exit } = sideAnchors(fromRect, toRect);
+            const { fromAnchor, toAnchor, exit } = sideAnchors(fromRect, toRect, this.orientation);
             const route = orthogonalPath([fromAnchor, toAnchor], exit);
 
             edge.line.setAttribute('d', route.d);
@@ -1431,7 +1433,7 @@ function relationColor(id) {
     return `hsl(${hash} 62% 45%)`;
 }
 
-function sideAnchors(fromRect, toRect) {
+function sideAnchors(fromRect, toRect, orientation = 'horizontal') {
     const fromCenter = {
         x: fromRect.x + fromRect.width / 2,
         y: fromRect.y + fromRect.height / 2,
@@ -1443,7 +1445,11 @@ function sideAnchors(fromRect, toRect) {
     const dx = toCenter.x - fromCenter.x;
     const dy = toCenter.y - fromCenter.y;
 
-    if (Math.abs(dx) >= Math.abs(dy)) {
+    const horizontalFirst = orientation === 'vertical'
+        ? Math.abs(dy) <= Math.abs(dx)
+        : Math.abs(dx) >= Math.abs(dy);
+
+    if (horizontalFirst) {
         if (dx >= 0) {
             return {
                 fromAnchor: { x: fromRect.x + fromRect.width, y: fromCenter.y },
