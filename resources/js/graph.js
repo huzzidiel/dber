@@ -744,7 +744,20 @@ export class Graph {
             }
 
             const { fromAnchor, toAnchor, exit } = sideAnchors(fromRect, toRect, this.orientation);
-            const route = orthogonalPath([fromAnchor, toAnchor], exit);
+            const entry = { x: -exit.x, y: -exit.y };
+            const distance = exit.x !== 0
+                ? Math.abs(toAnchor.x - fromAnchor.x)
+                : Math.abs(toAnchor.y - fromAnchor.y);
+            const stub = Math.max(GRID, Math.min(GRID * 2, Math.floor(distance / 2) - GRID));
+            const fromStub = {
+                x: fromAnchor.x + exit.x * stub,
+                y: fromAnchor.y + exit.y * stub,
+            };
+            const toStub = {
+                x: toAnchor.x + entry.x * stub,
+                y: toAnchor.y + entry.y * stub,
+            };
+            const route = orthogonalPath([fromAnchor, fromStub, toStub, toAnchor], exit);
 
             edge.line.setAttribute('d', route.d);
             edge.hit.setAttribute('d', route.d);
