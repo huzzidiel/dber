@@ -847,7 +847,15 @@ a {
     fill: none;
     stroke: transparent;
     stroke-width: 16;
-    cursor: default;
+    cursor: crosshair;
+}
+
+.dber-edge-waypoint {
+    cursor: move;
+}
+
+.dber-edge-waypoint:hover {
+    stroke-width: 2.5;
 }
 
 .dber-edge-line {

@@ -12,8 +12,10 @@ const NODE_MAX_WIDTH = 392;
 const HEADER_HEIGHT = 48;
 const FIELD_HEIGHT = 20;
 const NODE_BOTTOM_PADDING = 10;
-const COLUMN_GAP = 132;
-const ROW_GAP = 34;
+const GRID = 20;
+const MIN_TABLE_GAP = GRID * 3;
+const COLUMN_GAP = 140;
+const ROW_GAP = MIN_TABLE_GAP;
 const MIN_SCALE = 0.16;
 const MAX_SCALE = 2.5;
 
@@ -36,6 +38,7 @@ export class Graph {
         this.pivotSet = new Set();
         this.sizes = new Map();
         this.positions = new Map();
+        this.waypoints = new Map();
         this.selected = null;
         this.filter = '';
         this.showPivots = false;
@@ -45,10 +48,12 @@ export class Graph {
         this.translateY = 0;
 
         this.drag = null;
+        this.waypointDrag = null;
         this.pan = null;
         this.initialized = false;
 
         this.loadPositions();
+        this.loadWaypoints();
         this.bindEvents();
     }
 
@@ -294,8 +299,8 @@ export class Graph {
             for (const table of columns.get(column)) {
                 const size = this.sizes.get(table.key);
                 positions.set(table.key, {
-                    x: x + (columnWidth - size.width) / 2,
-                    y: yPositions.get(table.key) ?? 0,
+                    x: snap(x + (columnWidth - size.width) / 2),
+                    y: snap(yPositions.get(table.key) ?? 0),
                 });
             }
 
@@ -312,7 +317,7 @@ export class Graph {
     }
 
     placeMissing(tables) {
-        const gap = COLUMN_GAP / 2;
+        const gap = MIN_TABLE_GAP;
 
         for (const table of tables) {
             const size = this.sizes.get(table.key);
@@ -379,15 +384,15 @@ export class Graph {
 
         for (let attempt = 0; attempt < 120; attempt += 1) {
             const candidate = {
-                x: anchor.x + (direction < 0 && attempt > 0 ? -attempt * 24 : 0),
-                y: anchor.y + attempt * (size.height + ROW_GAP),
+                x: snap(anchor.x + (direction < 0 && attempt > 0 ? -attempt * GRID : 0)),
+                y: snap(anchor.y + attempt * (size.height + MIN_TABLE_GAP)),
             };
             const rect = {
                 ...candidate,
                 width: size.width,
                 height: size.height,
             };
-            const collision = existing.some((current) => overlaps(rect, current, 18));
+            const collision = existing.some((current) => overlaps(rect, current, MIN_TABLE_GAP));
 
             if (!collision) {
                 return candidate;
@@ -587,6 +592,7 @@ export class Graph {
     }
 
     renderEdge(relation) {
+        const color = relationColor(relation.id);
         const group = svg('g', {
             class: `dber-edge${relation.kind === 'many-to-many' ? ' is-many-to-many' : ''}`,
             'data-relation': relation.id,
@@ -598,10 +604,12 @@ export class Graph {
 
         const line = svg('path', {
             class: 'dber-edge-line',
+            style: `stroke: ${color};`,
         });
 
         const marker = svg('path', {
             class: 'dber-edge-marker',
+            style: `stroke: ${color};`,
         });
 
         const labelGroup = svg('g', {
@@ -616,6 +624,7 @@ export class Graph {
 
         const label = svg('text', {
             class: 'dber-edge-label',
+            fill: color,
             text: relation.kind === 'many-to-many' ? relation.pivotTable : relation.fromField,
         });
 
@@ -627,9 +636,40 @@ export class Graph {
         group.appendChild(marker);
         group.appendChild(labelGroup);
 
+        const waypointEls = [];
+        const waypoints = this.waypoints.get(relation.id) ?? [];
+
+        for (let index = 0; index < waypoints.length; index += 1) {
+            const circle = svg('circle', {
+                class: 'dber-edge-waypoint',
+                r: 5,
+                fill: color,
+                stroke: '#ffffff',
+                'stroke-width': 1.5,
+            });
+
+            circle.addEventListener('pointerdown', (event) => this.beginWaypointDrag(event, relation.id, index));
+            circle.addEventListener('dblclick', (event) => {
+                event.stopPropagation();
+                this.removeWaypoint(relation.id, index);
+            });
+
+            group.appendChild(circle);
+            waypointEls.push(circle);
+        }
+
         hit.addEventListener('click', (event) => {
             event.stopPropagation();
-            this.onSelect(relation.fromTable);
+            this.addWaypoint(relation.id, event);
+        });
+
+        group.addEventListener('click', (event) => {
+            if (event.target.closest('.dber-edge-waypoint') || event.target.closest('.dber-edge-label-group')) {
+                return;
+            }
+
+            event.stopPropagation();
+            this.addWaypoint(relation.id, event);
         });
 
         group.addEventListener('mouseenter', () => {
@@ -652,6 +692,7 @@ export class Graph {
             labelGroup,
             labelBg,
             label,
+            waypointEls,
         });
     }
 
@@ -700,7 +741,10 @@ export class Graph {
 
                 edge.line.setAttribute('d', path);
                 edge.hit.setAttribute('d', path);
-                edge.marker.setAttribute('d', this.markerPath(edge.relation, start, end));
+                edge.marker.setAttribute(
+                    'd',
+                    this.markerPath(edge.relation, start, { x: 1, y: 0 }, end, { x: 1, y: 0 }),
+                );
                 edge.label.setAttribute('x', labelX);
                 edge.label.setAttribute('y', centerY + 0.5);
                 edge.labelBg.setAttribute('x', labelX - labelWidth / 2);
@@ -710,24 +754,29 @@ export class Graph {
                 continue;
             }
 
-            const fromCenter = {
-                x: fromRect.x + fromRect.width / 2,
-                y: fromRect.y + fromRect.height / 2,
-            };
-            const toCenter = {
-                x: toRect.x + toRect.width / 2,
-                y: toRect.y + toRect.height / 2,
-            };
+            const { fromAnchor, toAnchor, exit } = sideAnchors(fromRect, toRect);
+            const waypoints = this.waypoints.get(edge.relation.id) ?? [];
+            const points = [fromAnchor, ...waypoints, toAnchor];
+            const route = orthogonalPath(points, exit);
 
-            const fromAnchor = rectAnchor(fromRect, toCenter);
-            const toAnchor = rectAnchor(toRect, fromCenter);
-            const path = edgePath(fromAnchor.point, toAnchor.point);
-            const midpoint = bezierMidpoint(fromAnchor.point, toAnchor.point);
+            edge.line.setAttribute('d', route.d);
+            edge.hit.setAttribute('d', route.d);
+            edge.marker.setAttribute(
+                'd',
+                this.markerPath(edge.relation, fromAnchor, route.firstDir, toAnchor, route.lastDir),
+            );
 
-            edge.line.setAttribute('d', path);
-            edge.hit.setAttribute('d', path);
-            edge.marker.setAttribute('d', this.markerPath(edge.relation, fromAnchor.point, toAnchor.point));
+            edge.waypointEls.forEach((circle, index) => {
+                const point = waypoints[index];
 
+                if (point) {
+                    circle.setAttribute('cx', point.x);
+                    circle.setAttribute('cy', point.y);
+                }
+            });
+
+            const midpoint = route.midpoints[Math.floor(route.midpoints.length / 2)]
+                ?? { x: (fromAnchor.x + toAnchor.x) / 2, y: (fromAnchor.y + toAnchor.y) / 2 };
             const labelText = edge.relation.kind === 'many-to-many'
                 ? edge.relation.pivotTable
                 : edge.relation.fromField;
@@ -742,12 +791,9 @@ export class Graph {
         }
     }
 
-    markerPath(relation, fromPoint, toPoint) {
-        const dx = toPoint.x - fromPoint.x;
-        const dy = toPoint.y - fromPoint.y;
-        const length = Math.hypot(dx, dy) || 1;
-        const direction = { x: dx / length, y: dy / length };
-        const perpendicular = { x: -direction.y, y: direction.x };
+    markerPath(relation, fromPoint, fromDir, toPoint, toDir) {
+        const fromPerpendicular = { x: -fromDir.y, y: fromDir.x };
+        const toPerpendicular = { x: -toDir.y, y: toDir.x };
         const paths = [];
 
         const manyAtFrom = relation.kind !== 'one-to-one';
@@ -756,22 +802,84 @@ export class Graph {
         const oneAtTo = relation.kind !== 'many-to-many';
 
         if (manyAtFrom) {
-            paths.push(crowsFoot(fromPoint, direction, perpendicular));
+            paths.push(crowsFoot(fromPoint, fromDir, fromPerpendicular));
         }
 
         if (manyAtTo) {
-            paths.push(crowsFoot(toPoint, { x: -direction.x, y: -direction.y }, perpendicular));
+            paths.push(crowsFoot(toPoint, { x: -toDir.x, y: -toDir.y }, toPerpendicular));
         }
 
         if (oneAtFrom) {
-            paths.push(tick(fromPoint, direction, perpendicular, 10));
+            paths.push(tick(fromPoint, fromDir, fromPerpendicular, 10));
         }
 
         if (oneAtTo) {
-            paths.push(tick(toPoint, { x: -direction.x, y: -direction.y }, perpendicular, 10));
+            paths.push(tick(toPoint, { x: -toDir.x, y: -toDir.y }, toPerpendicular, 10));
         }
 
         return paths.join(' ');
+    }
+
+    addWaypoint(relationId, event) {
+        const point = this.worldFromClient(event.clientX, event.clientY);
+        const list = this.waypoints.get(relationId) ?? [];
+
+        list.push({
+            x: snap(point.x),
+            y: snap(point.y),
+        });
+        this.waypoints.set(relationId, list);
+        this.persistWaypoints();
+        this.render();
+    }
+
+    removeWaypoint(relationId, index) {
+        const list = this.waypoints.get(relationId);
+
+        if (!list || !list[index]) {
+            return;
+        }
+
+        list.splice(index, 1);
+
+        if (list.length === 0) {
+            this.waypoints.delete(relationId);
+        }
+
+        this.persistWaypoints();
+        this.render();
+    }
+
+    beginWaypointDrag(event, relationId, index) {
+        if (event.button !== 0 || this.pan !== null) {
+            return;
+        }
+
+        event.stopPropagation();
+
+        const list = this.waypoints.get(relationId);
+
+        if (!list || !list[index]) {
+            return;
+        }
+
+        this.waypointDrag = {
+            pointerId: event.pointerId,
+            relationId,
+            index,
+            moved: false,
+        };
+
+        this.svgElement.setPointerCapture(event.pointerId);
+    }
+
+    worldFromClient(clientX, clientY) {
+        const rect = this.svgElement.getBoundingClientRect();
+
+        return {
+            x: (clientX - rect.left - this.translateX) / this.scale,
+            y: (clientY - rect.top - this.translateY) / this.scale,
+        };
     }
 
     applyFilter() {
@@ -895,6 +1003,23 @@ export class Graph {
                 return;
             }
 
+            if (this.waypointDrag !== null && event.pointerId === this.waypointDrag.pointerId) {
+                const point = this.worldFromClient(event.clientX, event.clientY);
+                const snapped = {
+                    x: snap(point.x),
+                    y: snap(point.y),
+                };
+                const list = this.waypoints.get(this.waypointDrag.relationId);
+
+                if (list && list[this.waypointDrag.index]) {
+                    list[this.waypointDrag.index] = snapped;
+                    this.waypointDrag.moved = true;
+                    this.positionEdges();
+                }
+
+                return;
+            }
+
             if (this.pan !== null && event.pointerId === this.pan.pointerId) {
                 const dx = event.clientX - this.pan.startX;
                 const dy = event.clientY - this.pan.startY;
@@ -915,6 +1040,20 @@ export class Graph {
                 const moved = this.drag.moved;
 
                 if (moved) {
+                    const position = this.positions.get(key);
+
+                    if (position) {
+                        position.x = snap(position.x);
+                        position.y = snap(position.y);
+                        const element = this.nodeEls.get(key);
+
+                        if (element) {
+                            element.setAttribute('transform', `translate(${position.x} ${position.y})`);
+                        }
+
+                        this.positionEdges();
+                    }
+
                     this.persistPositions();
                 } else {
                     this.onSelect(key);
@@ -923,6 +1062,15 @@ export class Graph {
                 this.nodeEls.get(key)?.classList.remove('is-dragging');
                 this.drag = null;
                 this.svgElement.classList.remove('is-dragging');
+                this.svgElement.releasePointerCapture?.(event.pointerId);
+            }
+
+            if (this.waypointDrag !== null && event.pointerId === this.waypointDrag.pointerId) {
+                if (this.waypointDrag.moved) {
+                    this.persistWaypoints();
+                }
+
+                this.waypointDrag = null;
                 this.svgElement.releasePointerCapture?.(event.pointerId);
             }
 
@@ -1068,7 +1216,9 @@ export class Graph {
 
     resetLayout() {
         this.positions.clear();
+        this.waypoints.clear();
         this.removePositions();
+        this.removeWaypoints();
         this.autoLayout();
         this.render();
         this.fit();
@@ -1134,6 +1284,66 @@ export class Graph {
     removePositions() {
         try {
             window.localStorage.removeItem(this.storageKey);
+        } catch {
+            // Ignorar.
+        }
+    }
+
+    persistWaypoints() {
+        try {
+            const data = {};
+
+            for (const [key, list] of this.waypoints) {
+                data[key] = list;
+            }
+
+            window.localStorage.setItem(`${this.storageKey}:waypoints`, JSON.stringify(data));
+        } catch {
+            // Ignorar almacenamiento no disponible.
+        }
+    }
+
+    loadWaypoints() {
+        try {
+            const raw = window.localStorage.getItem(`${this.storageKey}:waypoints`);
+
+            if (!raw) {
+                return;
+            }
+
+            const data = JSON.parse(raw);
+
+            if (!data || typeof data !== 'object') {
+                return;
+            }
+
+            for (const [key, list] of Object.entries(data)) {
+                if (!Array.isArray(list)) {
+                    continue;
+                }
+
+                const points = list.filter(
+                    (point) => point
+                        && typeof point === 'object'
+                        && Number.isFinite(point.x)
+                        && Number.isFinite(point.y),
+                ).map((point) => ({
+                    x: snap(Number(point.x)),
+                    y: snap(Number(point.y)),
+                }));
+
+                if (points.length > 0) {
+                    this.waypoints.set(key, points);
+                }
+            }
+        } catch {
+            this.waypoints.clear();
+        }
+    }
+
+    removeWaypoints() {
+        try {
+            window.localStorage.removeItem(`${this.storageKey}:waypoints`);
         } catch {
             // Ignorar.
         }
@@ -1339,4 +1549,132 @@ function tableHueValue(name) {
     }
 
     return hash;
+}
+
+function snap(value) {
+    return Math.round(value / GRID) * GRID;
+}
+
+function relationColor(id) {
+    let hash = 0;
+
+    for (let index = 0; index < id.length; index += 1) {
+        hash = (hash * 31 + id.charCodeAt(index)) % 360;
+    }
+
+    return `hsl(${hash} 62% 45%)`;
+}
+
+function sideAnchors(fromRect, toRect) {
+    const fromCenter = {
+        x: fromRect.x + fromRect.width / 2,
+        y: fromRect.y + fromRect.height / 2,
+    };
+    const toCenter = {
+        x: toRect.x + toRect.width / 2,
+        y: toRect.y + toRect.height / 2,
+    };
+    const dx = toCenter.x - fromCenter.x;
+    const dy = toCenter.y - fromCenter.y;
+
+    if (Math.abs(dx) >= Math.abs(dy)) {
+        if (dx >= 0) {
+            return {
+                fromAnchor: { x: fromRect.x + fromRect.width, y: fromCenter.y },
+                toAnchor: { x: toRect.x, y: toCenter.y },
+                exit: { x: 1, y: 0 },
+            };
+        }
+
+        return {
+            fromAnchor: { x: fromRect.x, y: fromCenter.y },
+            toAnchor: { x: toRect.x + toRect.width, y: toCenter.y },
+            exit: { x: -1, y: 0 },
+        };
+    }
+
+    if (dy >= 0) {
+        return {
+            fromAnchor: { x: fromCenter.x, y: fromRect.y + fromRect.height },
+            toAnchor: { x: toCenter.x, y: toRect.y },
+            exit: { x: 0, y: 1 },
+        };
+    }
+
+    return {
+        fromAnchor: { x: fromCenter.x, y: fromRect.y },
+        toAnchor: { x: toCenter.x, y: toRect.y + toRect.height },
+        exit: { x: 0, y: -1 },
+    };
+}
+
+function orthogonalPath(points, exit) {
+    if (points.length < 2) {
+        return {
+            d: '',
+            firstDir: { x: 1, y: 0 },
+            lastDir: { x: 1, y: 0 },
+            midpoints: [],
+        };
+    }
+
+    const segments = [];
+
+    for (let index = 1; index < points.length; index += 1) {
+        const from = points[index - 1];
+        const to = points[index];
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+
+        if (dx === 0 || dy === 0) {
+            segments.push({
+                from,
+                to,
+                dir: {
+                    x: dx === 0 ? 0 : Math.sign(dx),
+                    y: dy === 0 ? 0 : Math.sign(dy),
+                },
+            });
+            continue;
+        }
+
+        const horizontalFirst = index === 1
+            ? Math.abs(exit.x) > 0
+            : segments.length % 2 === 0;
+
+        const corner = horizontalFirst
+            ? { x: to.x, y: from.y }
+            : { x: from.x, y: to.y };
+
+        segments.push({
+            from,
+            to: corner,
+            dir: horizontalFirst
+                ? { x: Math.sign(dx), y: 0 }
+                : { x: 0, y: Math.sign(dy) },
+        });
+        segments.push({
+            from: corner,
+            to,
+            dir: horizontalFirst
+                ? { x: 0, y: Math.sign(dy) }
+                : { x: Math.sign(dx), y: 0 },
+        });
+    }
+
+    let d = `M ${points[0].x} ${points[0].y}`;
+
+    for (const segment of segments) {
+        d += ` L ${segment.to.x} ${segment.to.y}`;
+    }
+
+    return {
+        d,
+        firstDir: segments[0]?.dir ?? { x: 1, y: 0 },
+        lastDir: segments[segments.length - 1]?.dir ?? { x: 1, y: 0 },
+        midpoints: segments.map((segment) => ({
+            x: (segment.from.x + segment.to.x) / 2,
+            y: (segment.from.y + segment.to.y) / 2,
+        })),
+    };
 }
