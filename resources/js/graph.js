@@ -47,7 +47,7 @@ export class Graph {
         this.selected = null;
         this.selectedEdge = null;
         this.filter = '';
-        this.showPivots = false;
+        this.showPivots = true;
 
         this.scale = 1;
         this.translateX = 0;

@@ -238,14 +238,6 @@
             ></div>
 
             <div class="dber-sidebar-foot">
-                <label class="dber-check">
-                    <input
-                        id="dber-show-pivots"
-                        type="checkbox"
-                    >
-                    <span>Show pivot tables on canvas</span>
-                </label>
-
                 <div class="dber-sidebar-actions">
                     <button
                         id="dber-auto-layout"

@@ -26,7 +26,7 @@ export class Store {
         this.dirty = false;
         this.conflict = false;
         this.selected = null;
-        this.showPivots = false;
+        this.showPivots = true;
         this.filter = '';
         this.history = [];
         this.future = [];
@@ -144,11 +144,6 @@ export class Store {
 
     setFilter(value) {
         this.filter = value;
-        this.emit('filter');
-    }
-
-    setShowPivots(value) {
-        this.showPivots = value;
         this.emit('filter');
     }
 

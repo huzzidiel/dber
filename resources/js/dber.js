@@ -54,7 +54,6 @@ class DberApp {
             addTable: qs('#dber-add-table'),
             search: qs('#dber-search'),
             tableList: qs('#dber-table-list'),
-            showPivots: qs('#dber-show-pivots'),
             autoLayout: qs('#dber-auto-layout'),
             autoLayoutVertical: qs('#dber-auto-layout-vertical'),
             fit: qs('#dber-fit'),
@@ -83,9 +82,7 @@ class DberApp {
             nodes: qs('#dber-nodes'),
         };
 
-        this.showPivots = window.localStorage.getItem('dber:show-pivots') === '1';
-        this.store.showPivots = this.showPivots;
-        this.elements.showPivots.checked = this.showPivots;
+        this.store.showPivots = true;
 
         this.theme = window.localStorage.getItem('dber:theme')
             ?? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
@@ -219,19 +216,6 @@ class DberApp {
 
         const search = debounce((value) => this.store.setFilter(value), 90);
         this.elements.search.addEventListener('input', () => search(this.elements.search.value));
-
-        this.elements.showPivots.addEventListener('change', () => {
-            const checked = this.elements.showPivots.checked;
-
-            try {
-                window.localStorage.setItem('dber:show-pivots', checked ? '1' : '0');
-            } catch {
-                // Ignorar almacenamiento no disponible.
-            }
-
-            this.store.setShowPivots(checked);
-            window.setTimeout(() => this.graph.resetLayout(this.graph.orientation), 0);
-        });
 
         this.elements.autoLayout.addEventListener('click', () => {
             this.graph.resetLayout('horizontal');
@@ -945,7 +929,6 @@ class DberApp {
         this.elements.addTable.disabled = !this.store.editable;
         this.elements.import.disabled = !this.store.editable;
         this.elements.generate.disabled = !this.store.editable;
-        this.elements.showPivots.checked = this.store.showPivots;
         this.elements.emptyPath.textContent = this.store.path || this.schemaPath;
 
         document.title = `Dber · ${project}`;
