@@ -14,8 +14,11 @@ const FIELD_HEIGHT = 20;
 const NODE_BOTTOM_PADDING = 10;
 const GRID = 20;
 const MIN_TABLE_GAP = GRID * 3;
-const COLUMN_GAP = 140;
-const ROW_GAP = MIN_TABLE_GAP;
+const RANK_GAP = GRID * 8;
+const STUB = GRID * 4;
+const SAME_RANK_STUB = GRID;
+const COLUMN_GAP = RANK_GAP;
+const ROW_GAP = RANK_GAP;
 const MIN_SCALE = 0.16;
 const MAX_SCALE = 2.5;
 
@@ -50,6 +53,7 @@ export class Graph {
         this.drag = null;
         this.pan = null;
         this.orientation = 'horizontal';
+        this.depth = new Map();
         this.initialized = false;
 
         this.loadPositions();
@@ -63,6 +67,7 @@ export class Graph {
         this.byKey = new Map(tables.map((table) => [table.key, table]));
         this.relations = relations;
         this.pivotSet = new Set(pivotTables);
+        this.computeDepth();
         this.selected = selected ?? this.selected;
         this.filter = filter ?? this.filter;
         this.showPivots = showPivots;
@@ -113,6 +118,37 @@ export class Graph {
 
     visibleTables() {
         return this.tables.filter((table) => this.showPivots || !this.pivotSet.has(table.key));
+    }
+
+    computeDepth() {
+        const visible = this.visibleTables();
+        const keys = new Set(visible.map((table) => table.key));
+        const depth = new Map(visible.map((table) => [table.key, 0]));
+
+        for (let pass = 0; pass < visible.length; pass += 1) {
+            let changed = false;
+
+            for (const relation of this.relations) {
+                if (relation.kind === 'many-to-many' || relation.fromTable === relation.toTable) {
+                    continue;
+                }
+
+                if (!keys.has(relation.fromTable) || !keys.has(relation.toTable)) {
+                    continue;
+                }
+
+                if (depth.get(relation.fromTable) < (depth.get(relation.toTable) ?? 0) + 1) {
+                    depth.set(relation.fromTable, (depth.get(relation.toTable) ?? 0) + 1);
+                    changed = true;
+                }
+            }
+
+            if (!changed) {
+                break;
+            }
+        }
+
+        this.depth = depth;
     }
 
     computeSizes() {
@@ -241,6 +277,8 @@ export class Graph {
                 }
             }
         }
+
+        this.depth = depth;
 
         const ranks = new Map();
 
@@ -745,10 +783,12 @@ export class Graph {
 
             const { fromAnchor, toAnchor, exit } = sideAnchors(fromRect, toRect, this.orientation);
             const entry = { x: -exit.x, y: -exit.y };
-            const distance = exit.x !== 0
-                ? Math.abs(toAnchor.x - fromAnchor.x)
-                : Math.abs(toAnchor.y - fromAnchor.y);
-            const stub = Math.max(GRID, Math.min(GRID * 2, Math.floor(distance / 2) - GRID));
+            const fromDepth = this.depth.get(edge.relation.fromTable);
+            const toDepth = this.depth.get(edge.relation.toTable);
+            const sameRank = fromDepth !== undefined
+                && toDepth !== undefined
+                && fromDepth === toDepth;
+            const stub = sameRank ? SAME_RANK_STUB : STUB;
             const fromStub = {
                 x: fromAnchor.x + exit.x * stub,
                 y: fromAnchor.y + exit.y * stub,

@@ -230,7 +230,7 @@ class DberApp {
             }
 
             this.store.setShowPivots(checked);
-            window.setTimeout(() => this.graph.resetLayout(), 0);
+            window.setTimeout(() => this.graph.resetLayout(this.graph.orientation), 0);
         });
 
         this.elements.autoLayout.addEventListener('click', () => {
