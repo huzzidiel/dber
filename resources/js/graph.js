@@ -11,6 +11,7 @@ const NODE_MIN_WIDTH = 236;
 const NODE_MAX_WIDTH = 392;
 const PIVOT_HIT_PADDING = 14;
 const HEADER_HEIGHT = 48;
+const GOLDEN_ANGLE = 137.508;
 const FIELD_HEIGHT = 20;
 const NODE_BOTTOM_PADDING = 10;
 const GRID = 20;
@@ -37,6 +38,7 @@ export class Graph {
         this.tables = [];
         this.byKey = new Map();
         this.relations = [];
+        this.relationColors = new Map();
         this.edgeEls = [];
         this.nodeEls = new Map();
         this.pivotSet = new Set();
@@ -67,6 +69,7 @@ export class Graph {
         this.tables = tables;
         this.byKey = new Map(tables.map((table) => [table.key, table]));
         this.relations = relations;
+        this.relationColors = this.assignRelationColors(relations);
         this.pivotSet = new Set(pivotTables);
         this.computeDepth();
         this.selected = selected ?? this.selected;
@@ -119,6 +122,17 @@ export class Graph {
 
     visibleTables() {
         return this.tables.filter((table) => this.showPivots || !this.pivotSet.has(table.key));
+    }
+
+    assignRelationColors(relations) {
+        const ordered = [...relations].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        const colors = new Map();
+
+        ordered.forEach((relation, index) => {
+            colors.set(relation.id, relationColorAt(index));
+        });
+
+        return colors;
     }
 
     computeDepth() {
@@ -665,7 +679,7 @@ export class Graph {
     }
 
     renderEdge(relation) {
-        const color = relationColor(relation.id);
+        const color = this.relationColors.get(relation.id) ?? relationColorAt(0);
         const group = svg('g', {
             class: `dber-edge${relation.kind === 'many-to-many' ? ' is-many-to-many' : ''}`,
             'data-relation': relation.id,
@@ -1496,14 +1510,10 @@ function snap(value) {
     return Math.round(value / GRID) * GRID;
 }
 
-function relationColor(id) {
-    let hash = 0;
+function relationColorAt(index) {
+    const hue = Math.round((index * GOLDEN_ANGLE) % 360);
 
-    for (let index = 0; index < id.length; index += 1) {
-        hash = (hash * 31 + id.charCodeAt(index)) % 360;
-    }
-
-    return `hsl(${hash} 62% 45%)`;
+    return `hsl(${hue} 62% 45%)`;
 }
 
 function sideAnchors(fromRect, toRect, orientation, fromDepth, toDepth) {
