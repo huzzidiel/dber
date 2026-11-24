@@ -56,6 +56,7 @@ export class Inspector {
         this.onSave = options.onSave ?? (() => {});
         this.bodyEl = null;
         this.lastSelected = null;
+        this.expandedFields = new Set();
     }
 
     render() {
@@ -245,6 +246,8 @@ export class Inspector {
                     disabled: !this.store.editable,
                     onclick: () => {
                         const name = this.store.addFieldAt(key, index + 1);
+                        this.expandedFields.add(name);
+                        this.render();
 
                         window.setTimeout(() => {
                             const input = this.root.querySelector(`[data-field="${cssEscape(name)}"] [data-field-name]`);
@@ -267,6 +270,8 @@ export class Inspector {
             disabled: !this.store.editable,
             onclick: () => {
                 const name = this.store.addField(key);
+                this.expandedFields.add(name);
+                this.render();
 
                 window.setTimeout(() => {
                     const input = this.root.querySelector(`[data-field="${cssEscape(name)}"] [data-field-name]`);
@@ -298,18 +303,51 @@ export class Inspector {
 
         const timestampStart = table.fields.findIndex((item) => isLifecycleField(item.name));
         const lastDataIndex = timestampStart === -1 ? table.fields.length - 1 : timestampStart - 1;
+        const expanded = this.expandedFields.has(field.name);
 
         const card = el('div', {
-            className: `dber-field-card${field.primary ? ' is-selected' : ''}`,
+            className: `dber-field-card${field.primary ? ' is-selected' : ''}${expanded ? '' : ' is-collapsed'}`,
             'data-field': field.name,
         });
 
-        const title = el('div', { className: 'dber-field-card-title' }, [
-            el('span', { text: field.name }),
+        const chevron = el('button', {
+            type: 'button',
+            className: 'dber-field-card-toggle',
+            text: expanded ? '▾' : '▸',
+            title: expanded ? 'Collapse field' : 'Expand field',
+        });
+
+        const title = el('button', { type: 'button', className: 'dber-field-card-title' }, [
+            el('span', { className: 'dber-field-card-name', text: field.name }),
             field.primary ? pill('PK', 'is-pk') : null,
             field.references ? pill('FK', 'is-fk') : null,
             field.unique ? pill('UQ', 'is-unique') : null,
+            el('span', { className: 'dber-field-card-type', text: field.typeLabel }),
         ]);
+
+        const toggle = () => {
+            const next = !this.expandedFields.has(field.name);
+
+            if (next) {
+                this.expandedFields.add(field.name);
+            } else {
+                this.expandedFields.delete(field.name);
+            }
+
+            card.classList.toggle('is-collapsed', !next);
+            chevron.textContent = next ? '▾' : '▸';
+            chevron.title = next ? 'Collapse field' : 'Expand field';
+        };
+
+        chevron.addEventListener('click', (event) => {
+            event.stopPropagation();
+            toggle();
+        });
+
+        title.addEventListener('click', (event) => {
+            event.stopPropagation();
+            toggle();
+        });
 
         const actions = el('div', { className: 'dber-field-card-actions' }, [
             el('button', {
@@ -338,7 +376,7 @@ export class Inspector {
             }),
         ]);
 
-        card.appendChild(el('div', { className: 'dber-field-card-head' }, [title, actions]));
+        card.appendChild(el('div', { className: 'dber-field-card-head' }, [chevron, title, actions]));
 
         const nameInput = this.input({
             value: field.name,
@@ -469,8 +507,6 @@ export class Inspector {
         });
         grid.appendChild(this.formRow('Default', defaultInput));
 
-        card.appendChild(grid);
-
         const flags = el('div', { className: 'dber-field-flags' }, [
             this.flag('Nullable', field.nullable, (checked) => {
                 this.store.edit(`nullable:${tableKey}:${field.name}`, () => {
@@ -519,8 +555,13 @@ export class Inspector {
             }));
         }
 
-        card.appendChild(flags);
-        card.appendChild(this.renderReferenceBox(tableKey, field));
+        const body = el('div', { className: 'dber-field-card-body' }, [
+            grid,
+            flags,
+            this.renderReferenceBox(tableKey, field),
+        ]);
+
+        card.appendChild(body);
 
         return card;
     }

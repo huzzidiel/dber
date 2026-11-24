@@ -1193,23 +1193,74 @@ a {
     margin-bottom: 8px;
 }
 
+.dber-field-card-toggle {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    color: var(--dber-faint);
+    background: transparent;
+    font-family: var(--dber-mono);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.dber-field-card-toggle:hover {
+    border-color: var(--dber-line);
+    color: var(--dber-text);
+    background: rgba(148, 163, 184, 0.08);
+}
+
 .dber-field-card-title {
     display: flex;
+    flex: 1;
     align-items: center;
     gap: 6px;
     min-width: 0;
-    overflow: hidden;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--dber-text);
     font-family: var(--dber-mono);
     font-size: 11.5px;
     font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.dber-field-card-name {
+    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.dber-field-card-type {
+    flex: 0 0 auto;
+    color: var(--dber-faint);
+    font-weight: 400;
 }
 
 .dber-field-card-actions {
     display: flex;
     gap: 1px;
     flex: 0 0 auto;
+}
+
+.dber-field-card-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.dber-field-card.is-collapsed .dber-field-card-body {
+    display: none;
+}
+
+.dber-field-card.is-collapsed .dber-field-card-head {
+    margin-bottom: 0;
 }
 
 .dber-field-flags {
