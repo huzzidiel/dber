@@ -23,6 +23,8 @@ const COLUMN_GAP = RANK_GAP;
 const ROW_GAP = RANK_GAP;
 const MIN_SCALE = 0.16;
 const MAX_SCALE = 2.5;
+const LANE_SPACING = 18;
+const GUTTER = GRID * 4;
 const TRAY_GAP = GRID * 4;
 const TRAY_HEADER = 34;
 const TRAY_CELL_W = 172;
@@ -66,6 +68,9 @@ export class Graph {
         this.pan = null;
         this.orientation = 'horizontal';
         this.depth = new Map();
+        this.rowBands = new Map();
+        this.ports = new Map();
+        this.edgeLanes = new Map();
         this.initialized = false;
 
         this.loadPositions();
@@ -911,6 +916,8 @@ export class Graph {
     }
 
     positionEdges() {
+        this.prepareRouting();
+
         for (const edge of this.edgeEls) {
             const fromPosition = this.positions.get(edge.relation.fromTable);
             const toPosition = this.positions.get(edge.relation.toTable);
@@ -968,39 +975,17 @@ export class Graph {
                 continue;
             }
 
-            const fromDepth = this.depth.get(edge.relation.fromTable);
-            const toDepth = this.depth.get(edge.relation.toTable);
-            const { fromAnchor, toAnchor, exit } = sideAnchors(
-                fromRect,
-                toRect,
-                this.orientation,
-                fromDepth,
-                toDepth,
-            );
-            const entry = { x: -exit.x, y: -exit.y };
-            const sameRank = fromDepth !== undefined
-                && toDepth !== undefined
-                && fromDepth === toDepth;
-            const stub = sameRank ? SAME_RANK_STUB : STUB;
-            const fromStub = {
-                x: fromAnchor.x + exit.x * stub,
-                y: fromAnchor.y + exit.y * stub,
-            };
-            const toStub = {
-                x: toAnchor.x + entry.x * stub,
-                y: toAnchor.y + entry.y * stub,
-            };
-            const route = orthogonalPath([fromAnchor, fromStub, toStub, toAnchor], exit);
+            const route = this.routeEdge(edge.relation, fromRect, toRect);
 
             edge.line.setAttribute('d', route.d);
             edge.hit.setAttribute('d', route.d);
             edge.marker.setAttribute(
                 'd',
-                this.markerPath(edge.relation, fromAnchor, route.firstDir, toAnchor, route.lastDir),
+                this.markerPath(edge.relation, route.fromPoint, route.firstDir, route.toPoint, route.lastDir),
             );
 
             const midpoint = route.midpoints[Math.floor(route.midpoints.length / 2)]
-                ?? { x: (fromAnchor.x + toAnchor.x) / 2, y: (fromAnchor.y + toAnchor.y) / 2 };
+                ?? { x: (route.fromPoint.x + route.toPoint.x) / 2, y: (route.fromPoint.y + route.toPoint.y) / 2 };
             const labelText = edge.relation.kind === 'many-to-many'
                 ? edge.relation.pivotTable
                 : edge.relation.fromField;
@@ -1042,6 +1027,419 @@ export class Graph {
         }
 
         return paths.join(' ');
+    }
+
+    prepareRouting() {
+        this.rowBands = new Map();
+        this.ports = new Map();
+        this.edgeLanes = new Map();
+
+        for (const table of this.layeredTables()) {
+            const position = this.positions.get(table.key);
+            const size = this.sizes.get(table.key);
+
+            if (!position || !size) {
+                continue;
+            }
+
+            const depth = this.depth.get(table.key) ?? 0;
+            const band = this.rowBands.get(depth) ?? {
+                top: Number.POSITIVE_INFINITY,
+                bottom: Number.NEGATIVE_INFINITY,
+            };
+
+            band.top = Math.min(band.top, position.y);
+            band.bottom = Math.max(band.bottom, position.y + size.height);
+            this.rowBands.set(depth, band);
+        }
+
+        this.computePorts();
+        this.assignChannelLanes();
+    }
+
+    computePorts() {
+        const groups = new Map();
+        const rects = new Map();
+
+        const rectOf = (key) => {
+            if (!rects.has(key)) {
+                const position = this.positions.get(key);
+                const size = this.sizes.get(key);
+
+                rects.set(key, position && size
+                    ? { x: position.x, y: position.y, width: size.width, height: size.height }
+                    : null);
+            }
+
+            return rects.get(key);
+        };
+
+        for (const edge of this.edgeEls) {
+            const relation = edge.relation;
+
+            if (relation.fromTable === relation.toTable) {
+                continue;
+            }
+
+            const fromRect = rectOf(relation.fromTable);
+            const toRect = rectOf(relation.toTable);
+
+            if (!fromRect || !toRect) {
+                continue;
+            }
+
+            const fromDepth = this.depth.get(relation.fromTable);
+            const toDepth = this.depth.get(relation.toTable);
+            const fromCx = fromRect.x + fromRect.width / 2;
+            const toCx = toRect.x + toRect.width / 2;
+            const fromCy = fromRect.y + fromRect.height / 2;
+            const toCy = toRect.y + toRect.height / 2;
+
+            let fromSide;
+            let toSide;
+
+            if (fromDepth !== toDepth) {
+                if (this.orientation === 'vertical') {
+                    if (fromDepth > toDepth) {
+                        fromSide = 'top';
+                        toSide = 'bottom';
+                    } else {
+                        fromSide = 'bottom';
+                        toSide = 'top';
+                    }
+                } else if (fromDepth > toDepth) {
+                    fromSide = 'left';
+                    toSide = 'right';
+                } else {
+                    fromSide = 'right';
+                    toSide = 'left';
+                }
+            } else if (this.orientation === 'vertical') {
+                if (toCx >= fromCx) {
+                    fromSide = 'right';
+                    toSide = 'left';
+                } else {
+                    fromSide = 'left';
+                    toSide = 'right';
+                }
+            } else if (toCy >= fromCy) {
+                fromSide = 'bottom';
+                toSide = 'top';
+            } else {
+                fromSide = 'top';
+                toSide = 'bottom';
+            }
+
+            const fromOther = this.orientation === 'vertical' ? toCx : toCy;
+            const toOther = this.orientation === 'vertical' ? fromCx : fromCy;
+
+            const add = (key, side, relationId, endpoint, other) => {
+                const groupKey = `${key}:${side}`;
+
+                if (!groups.has(groupKey)) {
+                    groups.set(groupKey, []);
+                }
+
+                groups.get(groupKey).push({ relationId, endpoint, other });
+            };
+
+            add(relation.fromTable, fromSide, relation.id, 'from', fromOther);
+            add(relation.toTable, toSide, relation.id, 'to', toOther);
+        }
+
+        const byEdge = new Map();
+
+        for (const [groupKey, list] of groups) {
+            list.sort((first, second) => first.other - second.other);
+
+            const separator = groupKey.lastIndexOf(':');
+            const key = groupKey.slice(0, separator);
+            const side = groupKey.slice(separator + 1);
+            const rect = rectOf(key);
+
+            if (!rect) {
+                continue;
+            }
+
+            const count = list.length;
+            const margin = 24;
+            const horizontalSide = side === 'top' || side === 'bottom';
+            const along = horizontalSide ? rect.width : rect.height;
+            const usable = Math.max(0, along - margin * 2);
+
+            list.forEach((item, index) => {
+                const ratio = count === 1 ? 0.5 : index / (count - 1);
+                const offset = margin + usable * ratio;
+                let x;
+                let y;
+
+                if (side === 'top') {
+                    x = rect.x + offset;
+                    y = rect.y;
+                } else if (side === 'bottom') {
+                    x = rect.x + offset;
+                    y = rect.y + rect.height;
+                } else if (side === 'left') {
+                    x = rect.x;
+                    y = rect.y + offset;
+                } else {
+                    x = rect.x + rect.width;
+                    y = rect.y + offset;
+                }
+
+                const entry = byEdge.get(item.relationId) ?? {};
+                entry[item.endpoint] = { x, y, side };
+                byEdge.set(item.relationId, entry);
+            });
+        }
+
+        this.ports = byEdge;
+    }
+
+    assignChannelLanes() {
+        if (this.orientation !== 'vertical') {
+            return;
+        }
+
+        const channels = new Map();
+
+        for (const edge of this.edgeEls) {
+            const relation = edge.relation;
+
+            if (relation.fromTable === relation.toTable) {
+                continue;
+            }
+
+            const fromDepth = this.depth.get(relation.fromTable);
+            const toDepth = this.depth.get(relation.toTable);
+
+            if (fromDepth === undefined || toDepth === undefined || Math.abs(fromDepth - toDepth) !== 1) {
+                continue;
+            }
+
+            const ports = this.ports.get(relation.id);
+
+            if (!ports) {
+                continue;
+            }
+
+            const channel = Math.min(fromDepth, toDepth);
+            const lo = Math.min(ports.from.x, ports.to.x);
+            const hi = Math.max(ports.from.x, ports.to.x);
+
+            if (!channels.has(channel)) {
+                channels.set(channel, []);
+            }
+
+            channels.get(channel).push({ relationId: relation.id, lo, hi });
+        }
+
+        for (const [channel, list] of channels) {
+            list.sort((first, second) => first.lo - second.lo);
+
+            const laneEnds = [];
+            const laneByRelation = new Map();
+            let laneCount = 0;
+
+            for (const item of list) {
+                let lane = 0;
+
+                while (lane < laneEnds.length && laneEnds[lane] > item.lo) {
+                    lane += 1;
+                }
+
+                if (lane >= laneEnds.length) {
+                    laneEnds.push(item.hi);
+                } else {
+                    laneEnds[lane] = item.hi;
+                }
+
+                laneByRelation.set(item.relationId, lane);
+                laneCount = Math.max(laneCount, lane + 1);
+            }
+
+            for (const [relationId, lane] of laneByRelation) {
+                this.edgeLanes.set(relationId, { channel, lane, total: laneCount });
+            }
+        }
+    }
+
+    routeEdge(relation, fromRect, toRect) {
+        const fromDepth = this.depth.get(relation.fromTable);
+        const toDepth = this.depth.get(relation.toTable);
+
+        if (this.orientation === 'vertical') {
+            return this.routeVertical(relation, fromRect, toRect, fromDepth, toDepth);
+        }
+
+        return this.routeHorizontal(relation, fromRect, toRect, fromDepth, toDepth);
+    }
+
+    routeVertical(relation, fromRect, toRect, fromDepth, toDepth) {
+        const ports = this.ports.get(relation.id);
+
+        if (!ports) {
+            return this.routeHorizontal(relation, fromRect, toRect, fromDepth, toDepth);
+        }
+
+        const from = ports.from;
+        const to = ports.to;
+        const away = {
+            top: { x: 0, y: -1 },
+            bottom: { x: 0, y: 1 },
+            left: { x: -1, y: 0 },
+            right: { x: 1, y: 0 },
+        };
+        const firstDir = away[from.side];
+        const lastDir = { x: -away[to.side].x, y: -away[to.side].y };
+
+        if (fromDepth === toDepth) {
+            const d = `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+
+            return {
+                d,
+                fromPoint: from,
+                toPoint: to,
+                firstDir,
+                lastDir,
+                midpoints: [{ x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }],
+            };
+        }
+
+        const adjacent = Math.abs(fromDepth - toDepth) === 1;
+        const upward = fromDepth > toDepth;
+
+        if (adjacent) {
+            const channel = Math.min(fromDepth, toDepth);
+            const laneInfo = this.edgeLanes.get(relation.id);
+            const lane = laneInfo ? laneInfo.lane : 0;
+            const total = laneInfo ? laneInfo.total : 1;
+            const laneOffset = (lane - (total - 1) / 2) * LANE_SPACING;
+            const bandTop = this.rowBands.get(channel)?.bottom ?? 0;
+            const bandBottom = this.rowBands.get(channel + 1)?.top ?? (bandTop + RANK_GAP);
+            const channelY = (bandTop + bandBottom) / 2 + laneOffset;
+
+            const d = `M ${from.x} ${from.y} L ${from.x} ${channelY} L ${to.x} ${channelY} L ${to.x} ${to.y}`;
+
+            return {
+                d,
+                fromPoint: from,
+                toPoint: to,
+                firstDir,
+                lastDir,
+                midpoints: [
+                    { x: from.x, y: channelY },
+                    { x: (from.x + to.x) / 2, y: channelY },
+                ],
+            };
+        }
+
+        const minX = this.layoutMinX();
+        const maxX = this.layoutMaxX();
+        const centerX = (minX + maxX) / 2;
+        const fromMidY = fromRect.y + fromRect.height / 2;
+        const side = fromRect.x + fromRect.width / 2 <= centerX ? 'left' : 'right';
+        const sideX = side === 'left' ? minX - GUTTER : maxX + GUTTER;
+        const fromSideX = side === 'left' ? fromRect.x : fromRect.x + fromRect.width;
+
+        const approachY = upward
+            ? this.channelCenter(toDepth, toDepth + 1)
+            : this.channelCenter(toDepth - 1, toDepth);
+
+        const d = `M ${fromSideX} ${fromMidY} L ${sideX} ${fromMidY} L ${sideX} ${approachY} L ${to.x} ${approachY} L ${to.x} ${to.y}`;
+
+        return {
+            d,
+            fromPoint: { x: fromSideX, y: fromMidY },
+            toPoint: to,
+            firstDir: { x: side === 'left' ? -1 : 1, y: 0 },
+            lastDir,
+            midpoints: [
+                { x: sideX, y: fromMidY },
+                { x: sideX, y: approachY },
+            ],
+        };
+    }
+
+    routeHorizontal(relation, fromRect, toRect, fromDepth, toDepth) {
+        const { fromAnchor, toAnchor, exit } = sideAnchors(
+            fromRect,
+            toRect,
+            'horizontal',
+            fromDepth,
+            toDepth,
+        );
+        const entry = { x: -exit.x, y: -exit.y };
+        const sameRank = fromDepth !== undefined
+            && toDepth !== undefined
+            && fromDepth === toDepth;
+        const stub = sameRank ? SAME_RANK_STUB : STUB;
+        const fromStub = {
+            x: fromAnchor.x + exit.x * stub,
+            y: fromAnchor.y + exit.y * stub,
+        };
+        const toStub = {
+            x: toAnchor.x + entry.x * stub,
+            y: toAnchor.y + entry.y * stub,
+        };
+        const route = orthogonalPath([fromAnchor, fromStub, toStub, toAnchor], exit);
+
+        return {
+            d: route.d,
+            fromPoint: fromAnchor,
+            toPoint: toAnchor,
+            firstDir: route.firstDir,
+            lastDir: route.lastDir,
+            midpoints: route.midpoints,
+        };
+    }
+
+    channelCenter(depthA, depthB) {
+        const bandA = this.rowBands.get(depthA);
+        const bandB = this.rowBands.get(depthB);
+
+        if (bandA && bandB) {
+            return (bandA.bottom + bandB.top) / 2;
+        }
+
+        if (bandA) {
+            return bandA.bottom + GUTTER;
+        }
+
+        if (bandB) {
+            return bandB.top - GUTTER;
+        }
+
+        return 0;
+    }
+
+    layoutMinX() {
+        let min = 0;
+
+        for (const table of this.layeredTables()) {
+            const position = this.positions.get(table.key);
+
+            if (position) {
+                min = Math.min(min, position.x);
+            }
+        }
+
+        return min;
+    }
+
+    layoutMaxX() {
+        let max = 0;
+
+        for (const table of this.layeredTables()) {
+            const position = this.positions.get(table.key);
+            const size = this.sizes.get(table.key);
+
+            if (position && size) {
+                max = Math.max(max, position.x + size.width);
+            }
+        }
+
+        return max;
     }
 
     selectEdge(relationId) {
