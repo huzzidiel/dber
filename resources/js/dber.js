@@ -54,6 +54,8 @@ class DberApp {
             addTable: qs('#dber-add-table'),
             search: qs('#dber-search'),
             tableList: qs('#dber-table-list'),
+            showUnrelated: qs('#dber-show-unrelated'),
+            showUnrelatedLabel: qs('#dber-show-unrelated-label'),
             autoLayout: qs('#dber-auto-layout'),
             autoLayoutVertical: qs('#dber-auto-layout-vertical'),
             fit: qs('#dber-fit'),
@@ -216,6 +218,10 @@ class DberApp {
 
         const search = debounce((value) => this.store.setFilter(value), 90);
         this.elements.search.addEventListener('input', () => search(this.elements.search.value));
+
+        this.elements.showUnrelated.addEventListener('change', () => {
+            this.graph.setShowUnrelated(this.elements.showUnrelated.checked);
+        });
 
         this.elements.autoLayout.addEventListener('click', () => {
             this.graph.resetLayout('horizontal');
@@ -921,6 +927,17 @@ class DberApp {
         this.elements.projectName.textContent = project;
         this.elements.stats.textContent = `${derived.stats.tables} tables · ${derived.stats.fields} fields · ${derived.stats.relations} relations`;
         this.elements.path.textContent = this.store.path || this.schemaPath;
+
+        const connected = new Set();
+
+        for (const relation of derived.relations) {
+            connected.add(relation.fromTable);
+            connected.add(relation.toTable);
+        }
+
+        const unrelated = derived.tables.filter((table) => !table.pivot && !connected.has(table.key)).length;
+
+        this.elements.showUnrelatedLabel.textContent = `Show unrelated tables (${unrelated})`;
         this.elements.dirty.hidden = !this.store.dirty;
         this.elements.save.disabled = !this.store.editable || !this.store.dirty || this.saving;
         this.elements.save.textContent = this.saving ? 'Saving…' : 'Save';

@@ -238,6 +238,15 @@
             ></div>
 
             <div class="dber-sidebar-foot">
+                <label class="dber-check">
+                    <input
+                        id="dber-show-unrelated"
+                        type="checkbox"
+                        checked
+                    >
+                    <span id="dber-show-unrelated-label">Show unrelated tables</span>
+                </label>
+
                 <div class="dber-sidebar-actions">
                     <button
                         id="dber-auto-layout"

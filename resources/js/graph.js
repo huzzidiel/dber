@@ -23,6 +23,12 @@ const COLUMN_GAP = RANK_GAP;
 const ROW_GAP = RANK_GAP;
 const MIN_SCALE = 0.16;
 const MAX_SCALE = 2.5;
+const TRAY_GAP = GRID * 4;
+const TRAY_HEADER = 34;
+const TRAY_CELL_W = 172;
+const TRAY_CELL_H = 40;
+const TRAY_CELL_GAP = GRID;
+const TRAY_COLUMNS = 6;
 
 export class Graph {
     constructor(options) {
@@ -42,6 +48,7 @@ export class Graph {
         this.edgeEls = [];
         this.nodeEls = new Map();
         this.pivotSet = new Set();
+        this.connected = new Set();
         this.sizes = new Map();
         this.positions = new Map();
         this.selected = null;
@@ -49,6 +56,7 @@ export class Graph {
         this.hover = null;
         this.filter = '';
         this.showPivots = true;
+        this.showUnrelated = true;
 
         this.scale = 1;
         this.translateX = 0;
@@ -72,6 +80,13 @@ export class Graph {
         this.relations = relations;
         this.relationColors = this.assignRelationColors(relations);
         this.pivotSet = new Set(pivotTables);
+        this.connected = new Set();
+
+        for (const relation of relations) {
+            this.connected.add(relation.fromTable);
+            this.connected.add(relation.toTable);
+        }
+
         this.computeDepth();
         this.selected = selected ?? this.selected;
         this.filter = filter ?? this.filter;
@@ -118,8 +133,22 @@ export class Graph {
         this.applyFilter();
     }
 
-    visibleTables() {
-        return this.tables.filter((table) => this.showPivots || !this.pivotSet.has(table.key));
+    setShowUnrelated(value) {
+        this.showUnrelated = value;
+        this.render();
+        this.fit();
+    }
+
+    layeredTables() {
+        return this.tables.filter((table) => !this.isIsolated(table));
+    }
+
+    isolatedTables() {
+        return this.tables.filter((table) => this.isIsolated(table));
+    }
+
+    isIsolated(table) {
+        return !table.pivot && !this.connected.has(table.key);
     }
 
     assignRelationColors(relations) {
@@ -134,7 +163,7 @@ export class Graph {
     }
 
     computeDepth() {
-        const visible = this.visibleTables();
+        const visible = this.layeredTables();
         const keys = new Set(visible.map((table) => table.key));
         const depth = new Map(visible.map((table) => [table.key, 0]));
 
@@ -187,7 +216,7 @@ export class Graph {
     }
 
     ensurePositions() {
-        const visible = this.visibleTables();
+        const visible = this.layeredTables();
         const missing = visible.filter((table) => !this.positions.has(table.key));
 
         if (this.positions.size === 0 || visible.length > 0 && missing.length === visible.length) {
@@ -203,7 +232,7 @@ export class Graph {
 
     autoLayout(persist = true, orientation = 'horizontal') {
         this.orientation = orientation;
-        const visible = this.visibleTables();
+        const visible = this.layeredTables();
 
         if (visible.length === 0) {
             this.positions.clear();
@@ -494,7 +523,7 @@ export class Graph {
         this.edgeEls = [];
         this.nodeEls = new Map();
 
-        const visible = this.visibleTables();
+        const visible = this.layeredTables();
         const visibleKeys = new Set(visible.map((table) => table.key));
         const relations = this.relations.filter((relation) => {
             if (relation.kind === 'many-to-many') {
@@ -512,10 +541,129 @@ export class Graph {
             this.renderNode(table);
         }
 
+        this.renderTray();
+
         this.positionEdges();
         this.applyFilter();
         this.applyNodeStates();
         this.applyEdgeSelection();
+    }
+
+    renderTray() {
+        const isolated = this.isolatedTables();
+
+        if (isolated.length === 0 || !this.showUnrelated) {
+            return;
+        }
+
+        const layered = this.layeredTables();
+        let minX = 0;
+        let maxY = 0;
+
+        for (const table of layered) {
+            const position = this.positions.get(table.key);
+            const size = this.sizes.get(table.key);
+
+            if (!position || !size) {
+                continue;
+            }
+
+            minX = Math.min(minX, position.x);
+            maxY = Math.max(maxY, position.y + size.height);
+        }
+
+        const top = maxY + TRAY_GAP;
+        const columns = TRAY_COLUMNS;
+        const bounds = {
+            x: minX,
+            y: top - TRAY_HEADER,
+            width: columns * TRAY_CELL_W + (columns - 1) * TRAY_CELL_GAP,
+            height: TRAY_HEADER
+                + Math.ceil(isolated.length / columns) * (TRAY_CELL_H + TRAY_CELL_GAP),
+        };
+
+        this.nodeLayer.appendChild(svg('rect', {
+            class: 'dber-tray-frame',
+            x: bounds.x,
+            y: bounds.y,
+            width: bounds.width,
+            height: bounds.height,
+            rx: 12,
+            ry: 12,
+        }));
+
+        this.nodeLayer.appendChild(svg('text', {
+            class: 'dber-tray-label',
+            x: bounds.x + 14,
+            y: bounds.y + 22,
+            text: `No relations (${isolated.length})`,
+        }));
+
+        isolated.forEach((table, index) => {
+            const col = index % columns;
+            const row = Math.floor(index / columns);
+            const x = minX + col * (TRAY_CELL_W + TRAY_CELL_GAP);
+            const y = top + row * (TRAY_CELL_H + TRAY_CELL_GAP);
+
+            this.renderTrayNode(table, x, y);
+        });
+    }
+
+    renderTrayNode(table, x, y) {
+        const width = TRAY_CELL_W;
+        const height = TRAY_CELL_H;
+        const group = svg('g', {
+            class: `dber-node is-tray${table.key === this.selected ? ' is-selected' : ''}`,
+            transform: `translate(${x} ${y})`,
+            'data-table': table.key,
+        });
+
+        group.appendChild(svg('title', {
+            text: `${table.key}\n${table.fields.length} fields\nNo relations`,
+        }));
+
+        group.appendChild(svg('rect', {
+            class: 'dber-node-bg',
+            width,
+            height,
+            rx: 8,
+            ry: 8,
+        }));
+
+        group.appendChild(svg('text', {
+            class: 'dber-tray-title',
+            x: 12,
+            y: 17,
+            text: truncate(table.key, Math.floor((width - 64) / 6.6)),
+        }));
+
+        group.appendChild(svg('text', {
+            class: 'dber-tray-meta',
+            x: 12,
+            y: 31,
+            text: `${table.fields.length} fields`,
+        }));
+
+        group.appendChild(svg('text', {
+            class: 'dber-node-badge',
+            x: width - 10,
+            y: 17,
+            text: '0 rel',
+            'text-anchor': 'end',
+        }));
+
+        group.addEventListener('pointerdown', (event) => {
+            event.stopPropagation();
+            this.onSelect(table.key);
+        });
+
+        group.addEventListener('dblclick', (event) => {
+            event.stopPropagation();
+            this.onEdit(table.key);
+        });
+
+        this.nodeLayer.appendChild(group);
+        this.nodeEls.set(table.key, group);
     }
 
     renderNode(table) {
@@ -1247,7 +1395,7 @@ export class Graph {
     }
 
     fit() {
-        const visible = this.visibleTables().filter((table) => this.positions.has(table.key));
+        const visible = this.layeredTables().filter((table) => this.positions.has(table.key));
 
         if (visible.length === 0) {
             this.scale = 1;
