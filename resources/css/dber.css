@@ -754,6 +754,15 @@ a {
     fill: #12332f;
 }
 
+.dber-node.is-related .dber-node-bg {
+    stroke: rgba(94, 234, 212, 0.6);
+    stroke-width: 1.8;
+}
+
+.dber-node.is-related .dber-node-header {
+    fill: #132a2e;
+}
+
 .dber-node.is-match .dber-node-bg {
     stroke: rgba(94, 234, 212, 0.72);
 }
@@ -898,12 +907,23 @@ a {
 }
 
 .dber-edge.is-active .dber-edge-line {
-    stroke: var(--dber-accent);
-    stroke-width: 2.4;
+    stroke-width: 2.6;
+    stroke-dasharray: 6 10;
+    animation: dber-edge-flow 0.9s linear infinite;
+}
+
+.dber-edge.is-active .dber-edge-marker {
+    stroke-width: 2.2;
 }
 
 .dber-edge.is-many-to-many.is-active .dber-edge-line {
     stroke: var(--dber-pink);
+}
+
+@keyframes dber-edge-flow {
+    to {
+        stroke-dashoffset: -16;
+    }
 }
 
 .dber-edge-label-bg {
@@ -1757,6 +1777,15 @@ html[data-theme="light"] .dber-node.is-selected .dber-node-bg {
 
 html[data-theme="light"] .dber-node.is-selected .dber-node-header {
     fill: #ccfbf1;
+}
+
+html[data-theme="light"] .dber-node.is-related .dber-node-bg {
+    stroke: rgba(13, 148, 136, 0.55);
+    stroke-width: 1.8;
+}
+
+html[data-theme="light"] .dber-node.is-related .dber-node-header {
+    fill: #ecfdf5;
 }
 
 html[data-theme="light"] .dber-node.is-match .dber-node-bg {

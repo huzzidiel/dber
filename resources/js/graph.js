@@ -108,10 +108,7 @@ export class Graph {
         this.selected = name;
         this.selectedEdge = null;
 
-        for (const [key, element] of this.nodeEls) {
-            element.classList.toggle('is-selected', key === name);
-        }
-
+        this.applyNodeStates();
         this.applyEdgeSelection();
     }
 
@@ -516,6 +513,7 @@ export class Graph {
 
         this.positionEdges();
         this.applyFilter();
+        this.applyNodeStates();
         this.applyEdgeSelection();
     }
 
@@ -895,10 +893,7 @@ export class Graph {
         this.selected = null;
         this.selectedEdge = relationId;
 
-        for (const [, element] of this.nodeEls) {
-            element.classList.toggle('is-selected', false);
-        }
-
+        this.applyNodeStates();
         this.applyEdgeSelection();
     }
 
@@ -940,6 +935,40 @@ export class Graph {
                 this.edgeLayer.appendChild(edge.group);
             }
         }
+    }
+
+    applyNodeStates() {
+        const related = this.relatedTableKeys();
+
+        for (const [key, element] of this.nodeEls) {
+            element.classList.toggle('is-selected', key === this.selected);
+            element.classList.toggle(
+                'is-related',
+                this.selected !== null && key !== this.selected && related.has(key),
+            );
+        }
+    }
+
+    relatedTableKeys() {
+        const keys = new Set();
+
+        if (this.selected === null) {
+            return keys;
+        }
+
+        for (const edge of this.edgeEls) {
+            const relation = edge.relation;
+
+            if (relation.fromTable === this.selected) {
+                keys.add(relation.toTable);
+            }
+
+            if (relation.toTable === this.selected) {
+                keys.add(relation.fromTable);
+            }
+        }
+
+        return keys;
     }
 
     isEdgeSelected(relation) {
