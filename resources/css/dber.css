@@ -771,6 +771,11 @@ a {
     opacity: 0.3;
 }
 
+.dber-node.is-faded {
+    opacity: 0.12;
+    transition: opacity 140ms ease;
+}
+
 .dber-node-title {
     fill: var(--dber-text);
     font-family: var(--dber-mono);
@@ -892,10 +897,25 @@ a {
     opacity: 0.16;
 }
 
+.dber-edge.is-faded {
+    opacity: 0.12;
+    transition: opacity 140ms ease;
+}
+
 .dber-edge-line,
 .dber-edge-marker,
 .dber-edge-label-group {
     pointer-events: none;
+}
+
+.dber-edge-label-group {
+    opacity: 0;
+    transition: opacity 120ms ease;
+}
+
+.dber-edge.is-active .dber-edge-label-group,
+.dber-edge.is-selected .dber-edge-label-group {
+    opacity: 1;
 }
 
 .dber-node:hover .dber-node-bg {

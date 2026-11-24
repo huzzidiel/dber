@@ -46,6 +46,7 @@ export class Graph {
         this.positions = new Map();
         this.selected = null;
         this.selectedEdge = null;
+        this.hover = null;
         this.filter = '';
         this.showPivots = true;
 
@@ -671,6 +672,16 @@ export class Graph {
             event.stopPropagation();
             this.onEdit(table.key);
         });
+        group.addEventListener('mouseenter', () => {
+            this.hover = { node: table.key };
+            this.applyFocus();
+        });
+        group.addEventListener('mouseleave', () => {
+            if (this.hover?.node === table.key) {
+                this.hover = null;
+                this.applyFocus();
+            }
+        });
 
         this.nodeLayer.appendChild(group);
         this.nodeEls.set(table.key, group);
@@ -727,12 +738,14 @@ export class Graph {
         });
 
         group.addEventListener('mouseenter', () => {
-            group.classList.add('is-active');
+            this.hover = { edge: relation.id };
+            this.applyFocus();
         });
 
         group.addEventListener('mouseleave', () => {
-            if (!this.isEdgeSelected(relation) && this.selectedEdge !== relation.id) {
-                group.classList.remove('is-active');
+            if (this.hover?.edge === relation.id) {
+                this.hover = null;
+                this.applyFocus();
             }
         });
 
@@ -922,9 +935,7 @@ export class Graph {
     applyEdgeSelection() {
         for (const edge of this.edgeEls) {
             const selected = this.selectedEdge === edge.relation.id;
-            const active = !selected && this.isEdgeSelected(edge.relation);
 
-            edge.group.classList.toggle('is-active', active);
             edge.group.classList.toggle('is-selected', selected);
 
             if (selected) {
@@ -935,10 +946,12 @@ export class Graph {
                 this.edgeLayer.appendChild(edge.group);
             }
         }
+
+        this.applyFocus();
     }
 
     applyNodeStates() {
-        const related = this.relatedTableKeys();
+        const related = this.relatedTableKeys(this.selected);
 
         for (const [key, element] of this.nodeEls) {
             element.classList.toggle('is-selected', key === this.selected);
@@ -949,31 +962,109 @@ export class Graph {
         }
     }
 
-    relatedTableKeys() {
+    applyFocus() {
+        const emphasizedEdges = new Set();
+        const hover = this.hover;
+
+        if (this.selected !== null) {
+            for (const edge of this.edgeEls) {
+                const relation = edge.relation;
+
+                if (relation.fromTable === this.selected || relation.toTable === this.selected) {
+                    emphasizedEdges.add(relation.id);
+                }
+            }
+        }
+
+        if (hover?.node) {
+            for (const edge of this.edgeEls) {
+                const relation = edge.relation;
+
+                if (relation.fromTable === hover.node || relation.toTable === hover.node) {
+                    emphasizedEdges.add(relation.id);
+                }
+            }
+        }
+
+        if (hover?.edge) {
+            emphasizedEdges.add(hover.edge);
+        }
+
+        let fadedNodes = null;
+        let fadedEdges = null;
+
+        if (hover?.node) {
+            const focused = new Set([hover.node, ...this.relatedTableKeys(hover.node)]);
+            fadedNodes = new Set();
+            fadedEdges = new Set();
+
+            for (const [key] of this.nodeEls) {
+                if (!focused.has(key)) {
+                    fadedNodes.add(key);
+                }
+            }
+
+            for (const edge of this.edgeEls) {
+                const relation = edge.relation;
+
+                if (relation.fromTable !== hover.node && relation.toTable !== hover.node) {
+                    fadedEdges.add(relation.id);
+                }
+            }
+        } else if (hover?.edge) {
+            const target = this.edgeEls.find((edge) => edge.relation.id === hover.edge);
+
+            if (target) {
+                fadedNodes = new Set();
+                fadedEdges = new Set();
+
+                for (const [key] of this.nodeEls) {
+                    if (key !== target.relation.fromTable && key !== target.relation.toTable) {
+                        fadedNodes.add(key);
+                    }
+                }
+
+                for (const edge of this.edgeEls) {
+                    if (edge.relation.id !== hover.edge) {
+                        fadedEdges.add(edge.relation.id);
+                    }
+                }
+            }
+        }
+
+        for (const [key, element] of this.nodeEls) {
+            element.classList.toggle('is-faded', fadedNodes !== null && fadedNodes.has(key));
+        }
+
+        for (const edge of this.edgeEls) {
+            edge.group.classList.toggle('is-faded', fadedEdges !== null && fadedEdges.has(edge.relation.id));
+            edge.group.classList.toggle(
+                'is-active',
+                emphasizedEdges.has(edge.relation.id) && edge.relation.id !== this.selectedEdge,
+            );
+        }
+    }
+
+    relatedTableKeys(key = this.selected) {
         const keys = new Set();
 
-        if (this.selected === null) {
+        if (key === null) {
             return keys;
         }
 
         for (const edge of this.edgeEls) {
             const relation = edge.relation;
 
-            if (relation.fromTable === this.selected) {
+            if (relation.fromTable === key) {
                 keys.add(relation.toTable);
             }
 
-            if (relation.toTable === this.selected) {
+            if (relation.toTable === key) {
                 keys.add(relation.fromTable);
             }
         }
 
         return keys;
-    }
-
-    isEdgeSelected(relation) {
-        return this.selected !== null
-            && (relation.fromTable === this.selected || relation.toTable === this.selected);
     }
 
     beginNodeDrag(event, key) {
