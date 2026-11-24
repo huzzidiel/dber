@@ -9,8 +9,7 @@ import { clear, clamp, formatDefault, svg } from './utils.js';
 
 const NODE_MIN_WIDTH = 236;
 const NODE_MAX_WIDTH = 392;
-const PIVOT_MIN_WIDTH = 264;
-const PIVOT_PADDING = 26;
+const PIVOT_HIT_PADDING = 14;
 const HEADER_HEIGHT = 48;
 const FIELD_HEIGHT = 20;
 const NODE_BOTTOM_PADDING = 10;
@@ -165,13 +164,8 @@ export class Graph {
                 longest = Math.max(longest, field.name.length + type.length + 8);
             }
 
-            let width = clamp(longest * 6.35 + 72, NODE_MIN_WIDTH, NODE_MAX_WIDTH);
-            let height = HEADER_HEIGHT + Math.max(1, table.fields.length) * FIELD_HEIGHT + NODE_BOTTOM_PADDING;
-
-            if (table.pivot) {
-                width = Math.max(width, PIVOT_MIN_WIDTH);
-                height += PIVOT_PADDING;
-            }
+            const width = clamp(longest * 6.35 + 72, NODE_MIN_WIDTH, NODE_MAX_WIDTH);
+            const height = HEADER_HEIGHT + Math.max(1, table.fields.length) * FIELD_HEIGHT + NODE_BOTTOM_PADDING;
 
             this.sizes.set(table.key, {
                 width: Math.round(width),
@@ -536,6 +530,20 @@ export class Graph {
         }
 
         group.appendChild(svg('title', { text: titleParts.join('\n') }));
+
+        if (table.pivot) {
+            group.appendChild(svg('rect', {
+                class: 'dber-node-hit',
+                x: -PIVOT_HIT_PADDING,
+                y: -PIVOT_HIT_PADDING,
+                width: width + PIVOT_HIT_PADDING * 2,
+                height: size.height + PIVOT_HIT_PADDING * 2,
+                rx: 14,
+                ry: 14,
+                fill: 'transparent',
+                'pointer-events': 'all',
+            }));
+        }
 
         group.appendChild(svg('rect', {
             class: 'dber-node-bg',
