@@ -737,7 +737,8 @@ a {
 }
 
 .dber-node.is-pivot .dber-node-bg {
-    stroke: rgba(244, 114, 182, 0.38);
+    stroke: rgba(244, 114, 182, 0.6);
+    stroke-dasharray: 6 4;
 }
 
 .dber-node.is-pivot .dber-node-header {
@@ -852,11 +853,11 @@ a {
 }
 
 .dber-edge.is-selected .dber-edge-line {
-    stroke-width: 4;
+    stroke-width: 6;
 }
 
 .dber-edge.is-selected .dber-edge-marker {
-    stroke-width: 2.5;
+    stroke-width: 3;
 }
 
 .dber-edge-line {
@@ -1742,7 +1743,8 @@ html[data-theme="light"] .dber-node-header {
 }
 
 html[data-theme="light"] .dber-node.is-pivot .dber-node-bg {
-    stroke: rgba(219, 39, 119, 0.4);
+    stroke: rgba(219, 39, 119, 0.55);
+    stroke-dasharray: 6 4;
 }
 
 html[data-theme="light"] .dber-node.is-pivot .dber-node-header {

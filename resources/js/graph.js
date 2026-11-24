@@ -9,6 +9,8 @@ import { clear, clamp, formatDefault, svg } from './utils.js';
 
 const NODE_MIN_WIDTH = 236;
 const NODE_MAX_WIDTH = 392;
+const PIVOT_MIN_WIDTH = 264;
+const PIVOT_PADDING = 26;
 const HEADER_HEIGHT = 48;
 const FIELD_HEIGHT = 20;
 const NODE_BOTTOM_PADDING = 10;
@@ -163,8 +165,13 @@ export class Graph {
                 longest = Math.max(longest, field.name.length + type.length + 8);
             }
 
-            const width = clamp(longest * 6.35 + 72, NODE_MIN_WIDTH, NODE_MAX_WIDTH);
-            const height = HEADER_HEIGHT + Math.max(1, table.fields.length) * FIELD_HEIGHT + NODE_BOTTOM_PADDING;
+            let width = clamp(longest * 6.35 + 72, NODE_MIN_WIDTH, NODE_MAX_WIDTH);
+            let height = HEADER_HEIGHT + Math.max(1, table.fields.length) * FIELD_HEIGHT + NODE_BOTTOM_PADDING;
+
+            if (table.pivot) {
+                width = Math.max(width, PIVOT_MIN_WIDTH);
+                height += PIVOT_PADDING;
+            }
 
             this.sizes.set(table.key, {
                 width: Math.round(width),
@@ -347,7 +354,6 @@ export class Graph {
             const gap = orientation === 'vertical' ? ROW_GAP : COLUMN_GAP;
 
             for (const table of ranks.get(rank)) {
-                const size = this.sizes.get(table.key);
                 const along = rankPositions.get(table.key) ?? 0;
 
                 if (orientation === 'vertical') {
@@ -357,7 +363,7 @@ export class Graph {
                     });
                 } else {
                     positions.set(table.key, {
-                        x: snap(offset + (extent - size.width) / 2),
+                        x: snap(offset),
                         y: snap(along),
                     });
                 }
@@ -781,10 +787,16 @@ export class Graph {
                 continue;
             }
 
-            const { fromAnchor, toAnchor, exit } = sideAnchors(fromRect, toRect, this.orientation);
-            const entry = { x: -exit.x, y: -exit.y };
             const fromDepth = this.depth.get(edge.relation.fromTable);
             const toDepth = this.depth.get(edge.relation.toTable);
+            const { fromAnchor, toAnchor, exit } = sideAnchors(
+                fromRect,
+                toRect,
+                this.orientation,
+                fromDepth,
+                toDepth,
+            );
+            const entry = { x: -exit.x, y: -exit.y };
             const sameRank = fromDepth !== undefined
                 && toDepth !== undefined
                 && fromDepth === toDepth;
@@ -1486,7 +1498,7 @@ function relationColor(id) {
     return `hsl(${hash} 62% 45%)`;
 }
 
-function sideAnchors(fromRect, toRect, orientation = 'horizontal') {
+function sideAnchors(fromRect, toRect, orientation, fromDepth, toDepth) {
     const fromCenter = {
         x: fromRect.x + fromRect.width / 2,
         y: fromRect.y + fromRect.height / 2,
@@ -1497,12 +1509,27 @@ function sideAnchors(fromRect, toRect, orientation = 'horizontal') {
     };
     const dx = toCenter.x - fromCenter.x;
     const dy = toCenter.y - fromCenter.y;
+    const crossRank = fromDepth !== undefined
+        && toDepth !== undefined
+        && fromDepth !== toDepth;
 
-    const horizontalFirst = orientation === 'vertical'
-        ? Math.abs(dy) <= Math.abs(dx)
-        : Math.abs(dx) >= Math.abs(dy);
+    if (orientation === 'vertical') {
+        if (crossRank) {
+            if (fromDepth > toDepth) {
+                return {
+                    fromAnchor: { x: fromCenter.x, y: fromRect.y },
+                    toAnchor: { x: toCenter.x, y: toRect.y + toRect.height },
+                    exit: { x: 0, y: -1 },
+                };
+            }
 
-    if (horizontalFirst) {
+            return {
+                fromAnchor: { x: fromCenter.x, y: fromRect.y + fromRect.height },
+                toAnchor: { x: toCenter.x, y: toRect.y },
+                exit: { x: 0, y: 1 },
+            };
+        }
+
         if (dx >= 0) {
             return {
                 fromAnchor: { x: fromRect.x + fromRect.width, y: fromCenter.y },
@@ -1515,6 +1542,22 @@ function sideAnchors(fromRect, toRect, orientation = 'horizontal') {
             fromAnchor: { x: fromRect.x, y: fromCenter.y },
             toAnchor: { x: toRect.x + toRect.width, y: toCenter.y },
             exit: { x: -1, y: 0 },
+        };
+    }
+
+    if (crossRank) {
+        if (fromDepth > toDepth) {
+            return {
+                fromAnchor: { x: fromRect.x, y: fromCenter.y },
+                toAnchor: { x: toRect.x + toRect.width, y: toCenter.y },
+                exit: { x: -1, y: 0 },
+            };
+        }
+
+        return {
+            fromAnchor: { x: fromRect.x + fromRect.width, y: fromCenter.y },
+            toAnchor: { x: toRect.x, y: toCenter.y },
+            exit: { x: 1, y: 0 },
         };
     }
 
