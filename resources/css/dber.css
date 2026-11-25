@@ -772,7 +772,7 @@ a {
 }
 
 .dber-node.is-faded {
-    opacity: 0.12;
+    opacity: 0.22;
     transition: opacity 140ms ease;
 }
 
