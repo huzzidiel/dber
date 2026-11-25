@@ -27,10 +27,8 @@ const LANE_SPACING = 18;
 const GUTTER = GRID * 4;
 const TRAY_GAP = GRID * 4;
 const TRAY_HEADER = 34;
-const TRAY_CELL_W = 172;
-const TRAY_CELL_H = 40;
 const TRAY_CELL_GAP = GRID;
-const TRAY_COLUMNS = 6;
+const TRAY_PAD = 14;
 
 export class Graph {
     constructor(options) {
@@ -564,6 +562,7 @@ export class Graph {
         const layered = this.layeredTables();
         let minX = 0;
         let maxY = 0;
+        let maxX = 0;
 
         for (const table of layered) {
             const position = this.positions.get(table.key);
@@ -575,16 +574,43 @@ export class Graph {
 
             minX = Math.min(minX, position.x);
             maxY = Math.max(maxY, position.y + size.height);
+            maxX = Math.max(maxX, position.x + size.width);
         }
 
+        const gap = TRAY_CELL_GAP;
         const top = maxY + TRAY_GAP;
-        const columns = TRAY_COLUMNS;
+        const maxWidth = Math.max(maxX - minX, NODE_MIN_WIDTH);
+
+        let cursorX = minX;
+        let rowTop = top + TRAY_HEADER;
+        let rowHeight = 0;
+        let frameRight = minX;
+        const placements = [];
+
+        for (const table of isolated) {
+            const size = this.sizes.get(table.key);
+
+            if (!size) {
+                continue;
+            }
+
+            if (cursorX + size.width > minX + maxWidth && cursorX > minX) {
+                cursorX = minX;
+                rowTop += rowHeight + gap;
+                rowHeight = 0;
+            }
+
+            placements.push({ table, x: cursorX, y: rowTop });
+            frameRight = Math.max(frameRight, cursorX + size.width);
+            cursorX += size.width + gap;
+            rowHeight = Math.max(rowHeight, size.height);
+        }
+
         const bounds = {
-            x: minX,
+            x: minX - TRAY_PAD,
             y: top - TRAY_HEADER,
-            width: columns * TRAY_CELL_W + (columns - 1) * TRAY_CELL_GAP,
-            height: TRAY_HEADER
-                + Math.ceil(isolated.length / columns) * (TRAY_CELL_H + TRAY_CELL_GAP),
+            width: (frameRight - minX) + TRAY_PAD * 2,
+            height: (rowTop + rowHeight - (top - TRAY_HEADER)) + TRAY_PAD,
         };
 
         this.nodeLayer.appendChild(svg('rect', {
@@ -599,88 +625,31 @@ export class Graph {
 
         this.nodeLayer.appendChild(svg('text', {
             class: 'dber-tray-label',
-            x: bounds.x + 14,
+            x: bounds.x + TRAY_PAD,
             y: bounds.y + 22,
             text: `No relations (${isolated.length})`,
         }));
 
-        isolated.forEach((table, index) => {
-            const col = index % columns;
-            const row = Math.floor(index / columns);
-            const x = minX + col * (TRAY_CELL_W + TRAY_CELL_GAP);
-            const y = top + row * (TRAY_CELL_H + TRAY_CELL_GAP);
-
-            this.renderTrayNode(table, x, y);
-        });
+        for (const placement of placements) {
+            this.renderNode(placement.table, placement.x, placement.y, true);
+        }
     }
 
-    renderTrayNode(table, x, y) {
-        const width = TRAY_CELL_W;
-        const height = TRAY_CELL_H;
-        const group = svg('g', {
-            class: `dber-node is-tray${table.key === this.selected ? ' is-selected' : ''}`,
-            transform: `translate(${x} ${y})`,
-            'data-table': table.key,
-        });
-
-        group.appendChild(svg('title', {
-            text: `${table.key}\n${table.fields.length} fields\nNo relations`,
-        }));
-
-        group.appendChild(svg('rect', {
-            class: 'dber-node-bg',
-            width,
-            height,
-            rx: 8,
-            ry: 8,
-        }));
-
-        group.appendChild(svg('text', {
-            class: 'dber-tray-title',
-            x: 12,
-            y: 17,
-            text: truncate(table.key, Math.floor((width - 64) / 6.6)),
-        }));
-
-        group.appendChild(svg('text', {
-            class: 'dber-tray-meta',
-            x: 12,
-            y: 31,
-            text: `${table.fields.length} fields`,
-        }));
-
-        group.appendChild(svg('text', {
-            class: 'dber-node-badge',
-            x: width - 10,
-            y: 17,
-            text: '0 rel',
-            'text-anchor': 'end',
-        }));
-
-        group.addEventListener('pointerdown', (event) => {
-            event.stopPropagation();
-            this.onSelect(table.key);
-        });
-
-        group.addEventListener('dblclick', (event) => {
-            event.stopPropagation();
-            this.onEdit(table.key);
-        });
-
-        this.nodeLayer.appendChild(group);
-        this.nodeEls.set(table.key, group);
-    }
-
-    renderNode(table) {
+    renderNode(table, x, y, isTray = false) {
         const size = this.sizes.get(table.key);
-        const position = this.positions.get(table.key);
-        const x = position.x;
-        const y = position.y;
+
+        if (x === undefined || y === undefined) {
+            const position = this.positions.get(table.key);
+
+            x = position.x;
+            y = position.y;
+        }
+
         const width = size.width;
         const hue = tableHueValue(table.key);
 
         const group = svg('g', {
-            class: `dber-node${table.pivot ? ' is-pivot' : ''}${table.key === this.selected ? ' is-selected' : ''}`,
+            class: `dber-node${table.pivot ? ' is-pivot' : ''}${isTray ? ' is-tray' : ''}${table.key === this.selected ? ' is-selected' : ''}`,
             transform: `translate(${x} ${y})`,
             'data-table': table.key,
         });
@@ -820,21 +789,33 @@ export class Graph {
             }));
         });
 
-        group.addEventListener('pointerdown', (event) => this.beginNodeDrag(event, table.key));
+        group.addEventListener('pointerdown', (event) => {
+            if (isTray) {
+                event.stopPropagation();
+                this.onSelect(table.key);
+                return;
+            }
+
+            this.beginNodeDrag(event, table.key);
+        });
+
         group.addEventListener('dblclick', (event) => {
             event.stopPropagation();
             this.onEdit(table.key);
         });
-        group.addEventListener('mouseenter', () => {
-            this.hover = { node: table.key };
-            this.applyFocus();
-        });
-        group.addEventListener('mouseleave', () => {
-            if (this.hover?.node === table.key) {
-                this.hover = null;
+
+        if (!isTray) {
+            group.addEventListener('mouseenter', () => {
+                this.hover = { node: table.key };
                 this.applyFocus();
-            }
-        });
+            });
+            group.addEventListener('mouseleave', () => {
+                if (this.hover?.node === table.key) {
+                    this.hover = null;
+                    this.applyFocus();
+                }
+            });
+        }
 
         this.nodeLayer.appendChild(group);
         this.nodeEls.set(table.key, group);
